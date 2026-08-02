@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { PublicLayout } from '@/components/PublicLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -5,15 +6,15 @@ import { Link } from 'wouter';
 import { Trophy, Calendar, MapPin, Users, ArrowRight, Clock } from 'lucide-react';
 import { getActiveTournament } from '@/data/tournaments';
 import { events } from '@/data/events';
-import { registrations } from '@/data/registrations';
-import { matches } from '@/data/matches';
 import { motion } from 'framer-motion';
 
 export default function Landing() {
   const tournament = getActiveTournament();
+  const [registrations, setRegistrations] = useState<any[]>([]);
+  const [matches, setMatches] = useState<any[]>([]);
   const totalRegistrations = registrations.length;
   const totalMatches = matches.length;
-  const completedMatches = matches.filter(m => m.status === "Completed").length;
+  const completedMatches = matches.filter(m => m.status === 'Completed').length;
 
   const container = {
     hidden: { opacity: 0 },
@@ -27,6 +28,29 @@ export default function Landing() {
     hidden: { opacity: 0, y: 20 },
     show: { opacity: 1, y: 0 }
   };
+
+  useEffect(() => {
+    let mounted = true;
+    const loadStats = async () => {
+      try {
+        const [regsRes, matchesRes] = await Promise.all([
+          fetch('/api/registrations'),
+          fetch('/api/matches')
+        ]);
+        if (!mounted) return;
+        if (regsRes.ok) {
+          const rows = await regsRes.json();
+          setRegistrations(Array.isArray(rows) ? rows : []);
+        }
+        if (matchesRes.ok) {
+          const rows = await matchesRes.json();
+          setMatches(Array.isArray(rows) ? rows : []);
+        }
+      } catch {}
+    };
+    loadStats();
+    return () => { mounted = false; };
+  }, []);
 
   return (
     <PublicLayout>

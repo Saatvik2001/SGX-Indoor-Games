@@ -1,8 +1,14 @@
+import path from "path";
+import url from "url";
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import dotenv from "dotenv";
+
+const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
 const app: Express = express();
 

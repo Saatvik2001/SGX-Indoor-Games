@@ -5,6 +5,12 @@
     "tsBuildInfoFile": ".tsbuildinfo",
     "outDir": "dist",
     "rootDir": "src",
+    "baseUrl": ".",
+    "paths": {
+      "@workspace/db": ["../../lib/db/src/index.ts"],
+      "@workspace/db/schema": ["../../lib/db/src/schema/index.ts"]
+    },
+    "allowImportingTsExtensions": true,
     "types": ["node"]
   },
   "include": ["src"],

@@ -1,21 +1,42 @@
+import { useEffect, useState } from 'react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { BarChart3, Download, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { events } from '@/data/events';
-import { registrations } from '@/data/registrations';
 import { matches } from '@/data/matches';
 import { employees } from '@/data/employees';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
 export default function Reports() {
+  const [regs, setRegs] = useState<any[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadRegistrations = async () => {
+      try {
+        const res = await fetch('/api/registrations');
+        if (!mounted) return;
+        if (res.ok) {
+          const rows = await res.json();
+          setRegs(Array.isArray(rows) ? rows : []);
+        }
+      } catch {
+        if (mounted) setRegs([]);
+      }
+    };
+
+    loadRegistrations();
+    return () => { mounted = false; };
+  }, []);
+
   const departmentData = [
     'Engineering', 'HR', 'Finance', 'Marketing', 'Operations', 'Sales', 'Design', 'Legal'
   ].map(dept => ({
     department: dept,
     employees: employees.filter(e => e.department === dept).length,
-    registrations: registrations.filter(r => {
-      const emp = employees.find(e => e.id === r.employeeId);
+    registrations: regs.filter(r => {
+      const emp = employees.find(e => e.id === r.employee_id);
       return emp?.department === dept;
     }).length
   }));
@@ -40,7 +61,25 @@ export default function Reports() {
               Tournament statistics and insights
             </p>
           </div>
-          <Button className="gap-2" data-testid="button-export-report">
+          <Button className="gap-2" data-testid="button-export-report" onClick={() => {
+            // Build CSV from registrations
+            const headers = ['providedEmployeeId','employeeName','eventId','eventName','location','registrationDate'];
+            const rows = regs.map(r => {
+              const ev = events.find(e => e.id === r.event_id);
+              const emp = employees.find(e => e.id === r.employee_id);
+              return [r.provided_employee_id || '', emp?.name || r.employee_name || '', r.event_id, ev?.name || '', r.location, r.registration_date];
+            });
+            const csv = [headers.join(','), ...rows.map(r => r.map(String).map(s => `"${s.replace(/"/g,'""')}"`).join(','))].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'registrations.csv';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+          }}>
             <Download className="h-4 w-4" />
             Export Report
           </Button>
@@ -52,7 +91,7 @@ export default function Reports() {
             <CardContent className="pt-6">
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-2">Total Participants</p>
-                <p className="text-3xl font-bold text-primary">{registrations.length}</p>
+                <p className="text-3xl font-bold text-primary">{regs.length}</p>
               </div>
             </CardContent>
           </Card>

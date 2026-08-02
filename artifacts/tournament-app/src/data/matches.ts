@@ -16,7 +16,7 @@ export interface Match {
   isBye: boolean;
 }
 
-const generateBracket = (eventId: string, playerIds: string[]): Match[] => {
+export const generateBracket = (eventId: string, playerIds: string[]): Match[] => {
   const matches: Match[] = [];
   let matchId = 1;
   
@@ -94,10 +94,18 @@ const generateBracket = (eventId: string, playerIds: string[]): Match[] => {
   return matches;
 };
 
-export let matches: Match[] = [
-  ...generateBracket("E001", ["EMP001", "EMP002", "EMP003", "EMP004", "EMP005", "EMP006", "EMP007", "EMP008", "EMP009", "EMP010", "EMP011", "EMP012", "EMP013", "EMP014", "EMP015", "EMP016"]),
-  ...generateBracket("E003", ["EMP021", "EMP022", "EMP023", "EMP024", "EMP025", "EMP026", "EMP027", "EMP028", "EMP029", "EMP030", "EMP031", "EMP032", "EMP033", "EMP034", "EMP035", "EMP036"])
-];
+// Start with no matches so the tournament can be started fresh.
+export let matches: Match[] = [];
+
+const persistMatches = () => {
+  try {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('matches', JSON.stringify(matches));
+    }
+  } catch (e) {
+    // ignore
+  }
+};
 
 export const getMatchesByEvent = (eventId: string) =>
   matches.filter(m => m.eventId === eventId);
@@ -106,7 +114,48 @@ export const updateMatch = (matchId: string, updates: Partial<Match>) => {
   const index = matches.findIndex(m => m.id === matchId);
   if (index !== -1) {
     matches[index] = { ...matches[index], ...updates };
+    persistMatches();
     return matches[index];
   }
   return null;
 };
+
+export const setMatchesForEvent = (eventId: string, newMatches: Match[]) => {
+  // Remove existing matches for the event and append new ones
+  matches = matches.filter(m => m.eventId !== eventId).concat(newMatches);
+  persistMatches();
+};
+
+// Try to hydrate matches from backend when running in browser
+if (typeof window !== 'undefined') {
+  (async () => {
+    try {
+      const raw = window.localStorage.getItem('matches');
+      if (raw) {
+        const parsed = JSON.parse(raw) as Match[];
+        if (Array.isArray(parsed)) matches = parsed;
+      }
+      const res = await fetch('/api/matches');
+      if (!res.ok) return;
+      const rows = await res.json();
+      const serverMatches: Match[] = rows.map((r: any) => ({
+        id: `M${r.id}`,
+        eventId: r.event_id,
+        round: r.round,
+        player1Id: r.player1_id,
+        player2Id: r.player2_id || undefined,
+        status: r.status,
+        scheduledDate: r.scheduled_date || undefined,
+        scheduledTime: undefined,
+        venue: undefined,
+        winnerId: r.winner_id || undefined,
+        score: r.meta?.score || undefined,
+        isBye: false
+      }));
+      matches = serverMatches;
+      persistMatches();
+    } catch (e) {
+      // ignore - keep empty mock
+    }
+  })();
+}

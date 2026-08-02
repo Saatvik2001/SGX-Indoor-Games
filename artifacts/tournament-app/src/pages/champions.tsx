@@ -1,12 +1,74 @@
+import { useEffect, useState } from 'react';
 import { PublicLayout } from '@/components/PublicLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Trophy, Award, Medal } from 'lucide-react';
-import { champions } from '@/data/champions';
-import { getEventById } from '@/data/events';
-import { getEmployeeById } from '@/data/employees';
+import { events, getEventById } from '@/data/events';
 import { motion } from 'framer-motion';
+import { type Registration } from '@/data/registrations';
 
 export default function Champions() {
+  const [matches, setMatches] = useState<any[]>([]);
+  const [regs, setRegs] = useState<Registration[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const [matchesRes, regsRes] = await Promise.all([
+          fetch('/api/matches'),
+          fetch('/api/registrations')
+        ]);
+        if (!mounted) return;
+        if (matchesRes.ok) {
+          const rows = await matchesRes.json();
+          setMatches(rows);
+        }
+        if (regsRes.ok) {
+          const rows = await regsRes.json();
+          setRegs(rows.map((r: any) => ({
+            id: String(r.id),
+            employeeId: r.employee_id,
+            employeeName: r.employee_name,
+            providedEmployeeId: r.provided_employee_id,
+            department: r.department,
+            tournamentId: r.tournament_id,
+            eventId: r.event_id,
+            partnerId: r.partner_id,
+            location: r.location,
+            registrationDate: r.registration_date,
+          })));
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, []);
+
+  const champions = events
+    .map(event => {
+      const eventMatches = matches.filter((m: any) => m.event_id === event.id);
+      const finalMatch = eventMatches.find((m: any) => m.round === 'Final');
+      if (!finalMatch || finalMatch.status !== 'Completed' || !finalMatch.winner_id) return null;
+      const winnerReg = regs.find(r => r.eventId === event.id && r.employeeId === finalMatch.winner_id);
+      const runnerReg = finalMatch.player2_id && regs.find(r => r.eventId === event.id && r.employeeId === finalMatch.player2_id);
+      const winnerMeta = finalMatch.meta || {};
+      return {
+        eventId: event.id,
+        championId: finalMatch.winner_id,
+        runnerId: finalMatch.player2_id,
+        declaredAt: finalMatch.scheduled_date || new Date().toISOString(),
+        winnerName: winnerReg?.employeeName || winnerMeta.winner_name || 'TBD',
+        runnerName: runnerReg?.employeeName || 'TBD',
+        winnerDepartment: winnerReg?.department || winnerMeta.winner_department || 'Unknown',
+        winnerLocation: winnerReg?.location || winnerMeta.winner_location || 'Unknown',
+        runnerDepartment: runnerReg?.department || 'Unknown',
+        runnerLocation: runnerReg?.location || 'Unknown',
+      };
+    })
+    .filter(Boolean) as Array<any>;
+
   return (
     <PublicLayout>
       <div className="min-h-[calc(100vh-4rem)] py-12 px-4">
@@ -41,8 +103,6 @@ export default function Champions() {
             <div className="space-y-8">
               {champions.map((champion, index) => {
                 const event = getEventById(champion.eventId);
-                const winner = getEmployeeById(champion.championId);
-                const runnerUp = champion.runnerId ? getEmployeeById(champion.runnerId) : null;
 
                 return (
                   <motion.div
@@ -82,9 +142,8 @@ export default function Champions() {
                               <div className="text-sm font-semibold text-yellow-600 mb-2">
                                 CHAMPION
                               </div>
-                              <h3 className="text-2xl font-bold mb-2">{winner?.name}</h3>
-                              <p className="text-muted-foreground text-sm">{winner?.department}</p>
-                              <p className="text-muted-foreground text-sm">{winner?.location}</p>
+                              <h3 className="text-2xl font-bold mb-2">{champion.winnerName}</h3>
+                              <p className="text-muted-foreground text-sm">{champion.winnerLocation}</p>
                               <div className="mt-4 inline-flex items-center gap-2 bg-yellow-500/10 px-4 py-2 rounded-full">
                                 <Trophy className="h-4 w-4 text-yellow-600" />
                                 <span className="text-sm font-medium text-yellow-600">1st Place</span>
@@ -93,7 +152,7 @@ export default function Champions() {
                           </motion.div>
 
                           {/* Runner-up */}
-                          {runnerUp && (
+                          {champion.runnerName && champion.runnerName !== 'TBD' && (
                             <motion.div
                               className="relative"
                               whileHover={{ scale: 1.02 }}
@@ -109,9 +168,8 @@ export default function Champions() {
                                 <div className="text-sm font-semibold text-slate-600 mb-2">
                                   RUNNER-UP
                                 </div>
-                                <h3 className="text-2xl font-bold mb-2">{runnerUp.name}</h3>
-                                <p className="text-muted-foreground text-sm">{runnerUp.department}</p>
-                                <p className="text-muted-foreground text-sm">{runnerUp.location}</p>
+                                <h3 className="text-2xl font-bold mb-2">{champion.runnerName}</h3>
+                                <p className="text-muted-foreground text-sm">{champion.runnerLocation}</p>
                                 <div className="mt-4 inline-flex items-center gap-2 bg-slate-400/10 px-4 py-2 rounded-full">
                                   <Medal className="h-4 w-4 text-slate-600" />
                                   <span className="text-sm font-medium text-slate-600">2nd Place</span>

@@ -1,18 +1,88 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PublicLayout } from '@/components/PublicLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trophy, Calendar } from 'lucide-react';
 import { events } from '@/data/events';
-import { getMatchesByEvent } from '@/data/matches';
-import { getEmployeeById } from '@/data/employees';
 import { StatusBadge } from '@/components/StatusBadge';
+import type { Registration } from '@/data/registrations';
 
 export default function Results() {
   const [selectedEvent, setSelectedEvent] = useState(events[0]?.id || '');
+  const [locationFilter, setLocationFilter] = useState<'Hyderabad' | 'Bangalore'>('Hyderabad');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [serverMatches, setServerMatches] = useState<any[]>([]);
+  const [serverRegs, setServerRegs] = useState<Registration[]>([]);
 
-  const eventMatches = getMatchesByEvent(selectedEvent);
-  const completedMatches = eventMatches.filter(m => m.status === "Completed");
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const [matchesRes, regsRes] = await Promise.all([
+          fetch('/api/matches'),
+          fetch(`/api/registrations${selectedEvent ? `?eventId=${selectedEvent}` : ''}`)
+        ]);
+        if (!mounted) return;
+        if (matchesRes.ok) {
+          const rows = await matchesRes.json();
+          const mapped = rows.map((r: any) => ({
+            id: `M${r.id}`,
+            eventId: r.event_id,
+            round: r.round,
+            player1Id: r.player1_id,
+            player2Id: r.player2_id || undefined,
+            status: r.status,
+            scheduledDate: r.scheduled_date || undefined,
+            scheduledTime: r.meta?.scheduled_time || undefined,
+            venue: r.meta?.venue || undefined,
+            winnerId: r.winner_id || undefined,
+            score: r.meta?.score || undefined,
+            isBye: false
+          }));
+          setServerMatches(mapped);
+        }
+        if (regsRes.ok) {
+          const rows = await regsRes.json();
+          const mappedRegs = rows.map((r: any) => ({
+            id: String(r.id),
+            employeeId: r.employee_id,
+            employeeName: r.employee_name,
+            providedEmployeeId: r.provided_employee_id,
+            department: r.department,
+            tournamentId: r.tournament_id,
+            eventId: r.event_id,
+            partnerId: r.partner_id,
+            location: r.location,
+            registrationDate: r.registration_date,
+          }));
+          setServerRegs(mappedRegs);
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [selectedEvent, refreshKey]);
+
+  const allEventMatches = serverMatches.filter(m => m.eventId === selectedEvent);
+  const locationEmployeeIds = new Set(
+    serverRegs.filter(r => r.eventId === selectedEvent && r.location === locationFilter).map(r => r.employeeId)
+  );
+
+  // Only completed matches involving participants from the selected location
+  const completedMatches = allEventMatches.filter(
+    m => m.status === 'Completed' && (locationEmployeeIds.has(m.player1Id) || (m.player2Id ? locationEmployeeIds.has(m.player2Id) : false))
+  );
+
+  // Listen for fixture updates from other tabs (storage event)
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'fixtures:update' || e.key === 'registrations:update') setRefreshKey(k => k + 1);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   return (
     <PublicLayout>
@@ -23,6 +93,21 @@ export default function Results() {
             <p className="text-muted-foreground">
               View completed match results and scores
             </p>
+          </div>
+
+          <div className="flex justify-center mb-4 gap-2">
+            <button
+              className={`px-3 py-1 rounded ${locationFilter === 'Hyderabad' ? 'bg-primary text-white' : 'bg-muted'}`}
+              onClick={() => setLocationFilter('Hyderabad')}
+            >
+              Hyderabad
+            </button>
+            <button
+              className={`px-3 py-1 rounded ${locationFilter === 'Bangalore' ? 'bg-primary text-white' : 'bg-muted'}`}
+              onClick={() => setLocationFilter('Bangalore')}
+            >
+              Bangalore
+            </button>
           </div>
 
           <Tabs value={selectedEvent} onValueChange={setSelectedEvent}>
@@ -46,10 +131,10 @@ export default function Results() {
                   <CardContent>
                     {completedMatches.length > 0 ? (
                       <div className="space-y-4">
-                        {completedMatches.map(match => {
-                          const player1 = getEmployeeById(match.player1Id);
-                          const player2 = match.player2Id ? getEmployeeById(match.player2Id) : null;
-                          const winner = match.winnerId ? getEmployeeById(match.winnerId) : null;
+                        {completedMatches.map((match) => {
+                          const participantLeft = serverRegs.find(r => r.employeeId === match.player1Id)?.employeeName || 'Participant 1';
+                          const participantRight = match.player2Id ? (serverRegs.find(r => r.employeeId === match.player2Id)?.employeeName || 'Participant 2') : 'TBD';
+                          const winnerLabel = match.winnerId ? (match.winnerId === match.player1Id ? participantLeft : participantRight) : 'TBD';
 
                           return (
                             <div
@@ -73,9 +158,8 @@ export default function Results() {
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
                                 <div className="text-center md:text-right">
                                   <p className={`font-medium ${match.winnerId === match.player1Id ? 'text-primary text-lg' : ''}`}>
-                                    {player1?.name}
+                                    {participantLeft}
                                   </p>
-                                  <p className="text-xs text-muted-foreground">{player1?.department}</p>
                                 </div>
 
                                 <div className="text-center">
@@ -87,16 +171,15 @@ export default function Results() {
 
                                 <div className="text-center md:text-left">
                                   <p className={`font-medium ${match.winnerId === match.player2Id ? 'text-primary text-lg' : ''}`}>
-                                    {player2?.name || 'TBD'}
+                                    {participantRight}
                                   </p>
-                                  <p className="text-xs text-muted-foreground">{player2?.department}</p>
                                 </div>
                               </div>
 
                               <div className="mt-4 pt-4 border-t space-y-2">
                                 <div className="flex items-center justify-between text-sm">
                                   <span className="text-muted-foreground">Winner:</span>
-                                  <span className="font-semibold text-primary">{winner?.name}</span>
+                                  <span className="font-semibold text-primary">{winnerLabel}</span>
                                 </div>
                                 {match.score && (
                                   <div className="flex items-center justify-between text-sm">

@@ -1,0 +1,232 @@
+{
+  "registrations": [
+    {
+      "id": 1,
+      "employee_id": "U1",
+      "provided_employee_id": "U1",
+      "employee_name": "Alice",
+      "department": null,
+      "tournament_id": "T001",
+      "event_id": "E001",
+      "partner_id": null,
+      "location": "Hyderabad",
+      "registration_date": "2026-08-02T22:26:50.233Z"
+    },
+    {
+      "id": 2,
+      "employee_id": "U2",
+      "provided_employee_id": "U2",
+      "employee_name": "Bob",
+      "department": null,
+      "tournament_id": "T001",
+      "event_id": "E001",
+      "partner_id": null,
+      "location": "Hyderabad",
+      "registration_date": "2026-08-02T22:26:50.234Z"
+    },
+    {
+      "id": 3,
+      "employee_id": "U3",
+      "provided_employee_id": "U3",
+      "employee_name": "Carol",
+      "department": null,
+      "tournament_id": "T001",
+      "event_id": "E001",
+      "partner_id": null,
+      "location": "Bangalore",
+      "registration_date": "2026-08-02T22:26:50.234Z"
+    },
+    {
+      "id": 4,
+      "employee_id": "U4",
+      "provided_employee_id": "U4",
+      "employee_name": "Dave",
+      "department": null,
+      "tournament_id": "T001",
+      "event_id": "E001",
+      "partner_id": null,
+      "location": "Bangalore",
+      "registration_date": "2026-08-02T22:26:50.234Z"
+    },
+    {
+      "id": 5,
+      "employee_id": "U1",
+      "provided_employee_id": "U1",
+      "employee_name": "Alice",
+      "department": null,
+      "tournament_id": "T001",
+      "event_id": "E001",
+      "partner_id": null,
+      "location": "Hyderabad",
+      "registration_date": "2026-08-02T22:28:45.372Z"
+    },
+    {
+      "id": 6,
+      "employee_id": "U2",
+      "provided_employee_id": "U2",
+      "employee_name": "Bob",
+      "department": null,
+      "tournament_id": "T001",
+      "event_id": "E001",
+      "partner_id": null,
+      "location": "Hyderabad",
+      "registration_date": "2026-08-02T22:28:45.375Z"
+    },
+    {
+      "id": 7,
+      "employee_id": "U3",
+      "provided_employee_id": "U3",
+      "employee_name": "Carol",
+      "department": null,
+      "tournament_id": "T001",
+      "event_id": "E001",
+      "partner_id": null,
+      "location": "Bangalore",
+      "registration_date": "2026-08-02T22:28:45.375Z"
+    },
+    {
+      "id": 8,
+      "employee_id": "U4",
+      "provided_employee_id": "U4",
+      "employee_name": "Dave",
+      "department": null,
+      "tournament_id": "T001",
+      "event_id": "E001",
+      "partner_id": null,
+      "location": "Bangalore",
+      "registration_date": "2026-08-02T22:28:45.375Z"
+    }
+  ],
+  "matches": [
+    {
+      "id": 1,
+      "event_id": "E001",
+      "round": "Round 1",
+      "player1_id": "U1",
+      "player2_id": "U2",
+      "winner_id": "U1",
+      "status": "Completed",
+      "scheduled_date": null,
+      "meta": {
+        "location": "Hyderabad",
+        "bracket_index": 0,
+        "winner_name": "Alice",
+        "winner_location": "Hyderabad"
+      }
+    },
+    {
+      "id": 2,
+      "event_id": "E001",
+      "round": "Quarter Final",
+      "player1_id": "U1",
+      "player2_id": null,
+      "winner_id": null,
+      "status": "Scheduled",
+      "scheduled_date": "2026-08-02T22:28:45.376Z",
+      "meta": {
+        "location": "Hyderabad",
+        "bracket_index": 0,
+        "scheduled_time": "10:00",
+        "venue": "Court A"
+      }
+    },
+    {
+      "id": 3,
+      "event_id": "E001",
+      "round": "Semi Final",
+      "player1_id": "",
+      "player2_id": null,
+      "winner_id": null,
+      "status": "Pending",
+      "scheduled_date": null,
+      "meta": {
+        "location": "Hyderabad",
+        "bracket_index": 0
+      }
+    },
+    {
+      "id": 4,
+      "event_id": "E001",
+      "round": "Final",
+      "player1_id": "",
+      "player2_id": null,
+      "winner_id": null,
+      "status": "Pending",
+      "scheduled_date": null,
+      "meta": {
+        "location": "Hyderabad",
+        "bracket_index": 0
+      }
+    },
+    {
+      "id": 5,
+      "event_id": "E001",
+      "round": "Round 1",
+      "player1_id": "U3",
+      "player2_id": "U4",
+      "winner_id": null,
+      "status": "Pending",
+      "scheduled_date": null,
+      "meta": {
+        "location": "Bangalore",
+        "bracket_index": 0
+      }
+    },
+    {
+      "id": 6,
+      "event_id": "E001",
+      "round": "Quarter Final",
+      "player1_id": "",
+      "player2_id": null,
+      "winner_id": null,
+      "status": "Pending",
+      "scheduled_date": null,
+      "meta": {
+        "location": "Bangalore",
+        "bracket_index": 0
+      }
+    },
+    {
+      "id": 7,
+      "event_id": "E001",
+      "round": "Semi Final",
+      "player1_id": "",
+      "player2_id": null,
+      "winner_id": null,
+      "status": "Pending",
+      "scheduled_date": null,
+      "meta": {
+        "location": "Bangalore",
+        "bracket_index": 0
+      }
+    },
+    {
+      "id": 8,
+      "event_id": "E001",
+      "round": "Final",
+      "player1_id": "",
+      "player2_id": null,
+      "winner_id": null,
+      "status": "Pending",
+      "scheduled_date": null,
+      "meta": {
+        "location": "Bangalore",
+        "bracket_index": 0
+      }
+    }
+  ],
+  "events": [],
+  "tournaments": [
+    {
+      "id": "t-delete-test",
+      "name": "Delete Test Tournament",
+      "description": "For delete tests",
+      "location": "Hyderabad",
+      "registration_start_date": "2026-08-01T00:00:00.000Z",
+      "registration_end_date": "2026-08-10T00:00:00.000Z",
+      "tournament_start_date": "2026-08-12T00:00:00.000Z",
+      "tournament_end_date": "2026-08-14T00:00:00.000Z",
+      "status": "Draft"
+    }
+  ]
+}

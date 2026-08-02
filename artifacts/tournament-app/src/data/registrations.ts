@@ -1,60 +1,44 @@
 export interface Registration {
   id: string;
-  employeeId: string;
+  employeeId: string; // internal id (can be anonymized)
+  employeeName?: string; // store the provided participant name
+  providedEmployeeId?: string; // the Employee ID entered by the user
+  department?: string;
   tournamentId: string;
   eventId: string;
   partnerId?: string;
+  partnerName?: string;
+  location?: string;
   registrationDate: string;
 }
+import { employees } from './employees';
 
-// Generate 120 mock registrations
-const generateRegistrations = (): Registration[] => {
-  const regs: Registration[] = [];
-  let regId = 1;
-  
-  // Singles events: E001, E003, E005 - 20 each
-  ["E001", "E003", "E005"].forEach(eventId => {
-    for (let i = 0; i < 20; i++) {
-      regs.push({
-        id: `REG${String(regId++).padStart(3, '0')}`,
-        employeeId: `EMP${String(Math.floor(Math.random() * 100) + 1).padStart(3, '0')}`,
-        tournamentId: "T001",
-        eventId,
-        registrationDate: new Date(2026, 0, 15 + Math.floor(Math.random() * 25)).toISOString()
-      });
-    }
-  });
-  
-  // Doubles events: E002, E004 - 30 pairs each (60 registrations)
-  ["E002", "E004"].forEach(eventId => {
-    for (let i = 0; i < 30; i++) {
-      const emp1 = Math.floor(Math.random() * 100) + 1;
-      let emp2 = Math.floor(Math.random() * 100) + 1;
-      while (emp2 === emp1) emp2 = Math.floor(Math.random() * 100) + 1;
-      
-      const emp1Id = `EMP${String(emp1).padStart(3, '0')}`;
-      const emp2Id = `EMP${String(emp2).padStart(3, '0')}`;
-      
-      regs.push({
-        id: `REG${String(regId++).padStart(3, '0')}`,
-        employeeId: emp1Id,
-        tournamentId: "T001",
-        eventId,
-        partnerId: emp2Id,
-        registrationDate: new Date(2026, 0, 15 + Math.floor(Math.random() * 25)).toISOString()
-      });
-    }
-  });
-  
-  return regs;
-};
+// Keep an in-memory registration store for the demo.
+export let registrations: Registration[] = [];
 
-export let registrations: Registration[] = generateRegistrations();
+// Hydrate from localStorage if available (client-side)
+try {
+  if (typeof window !== 'undefined') {
+    const raw = window.localStorage.getItem('registrations');
+    if (raw) registrations = JSON.parse(raw) as Registration[];
+  }
+} catch (e) {
+  // ignore
+}
 
-export const addRegistration = (reg: Omit<Registration, 'id'>) => {
+export const addRegistration = (reg: Omit<Registration, 'id'> & { employeeName?: string; partnerName?: string; location?: string; providedEmployeeId?: string }) => {
   const newId = `REG${String(registrations.length + 1).padStart(3, '0')}`;
-  const newReg = { ...reg, id: newId };
+  const newReg: Registration = { ...reg, id: newId } as Registration;
   registrations.push(newReg);
+  try {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('registrations', JSON.stringify(registrations));
+      // notify other tabs
+      window.localStorage.setItem('registrations:update', Date.now().toString());
+    }
+  } catch (e) {
+    // ignore
+  }
   return newReg;
 };
 
@@ -63,3 +47,9 @@ export const getRegistrationsByEvent = (eventId: string) =>
 
 export const getRegistrationsByEmployee = (employeeId: string) =>
   registrations.filter(r => r.employeeId === employeeId);
+
+export const getRegisteredEmployeeIdsByEventAndLocation = (eventId: string, location: 'Hyderabad' | 'Bangalore') => {
+  // Return anonymized IDs from registrations that match the event and location.
+  const regs = getRegistrationsByEvent(eventId).filter(r => r.location === location).map(r => r.employeeId);
+  return regs;
+};

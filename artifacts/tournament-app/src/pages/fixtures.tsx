@@ -1,22 +1,87 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PublicLayout } from '@/components/PublicLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Trophy, Users } from 'lucide-react';
-import { events, getEventById } from '@/data/events';
-import { getMatchesByEvent } from '@/data/matches';
-import { getEmployeeById } from '@/data/employees';
+import { events } from '@/data/events';
 import { StatusBadge } from '@/components/StatusBadge';
-import { cn } from '@/lib/utils';
-import type { MatchRound } from '@/data/matches';
+import type { Registration } from '@/data/registrations';
 
 export default function Fixtures() {
   const [selectedEvent, setSelectedEvent] = useState(events[0]?.id || '');
+  const [locationFilter, setLocationFilter] = useState<'Hyderabad' | 'Bangalore'>('Hyderabad');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [matchesState, setMatchesState] = useState<any[]>([]);
+  const [regsState, setRegsState] = useState<Registration[]>([]);
 
-  const eventMatches = getMatchesByEvent(selectedEvent);
-  const rounds: MatchRound[] = ["Round 1", "Round 2", "Quarter Final", "Semi Final", "Final"];
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'fixtures:update' || e.key === 'registrations:update') setRefreshKey(k => k + 1);
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
-  const getRoundMatches = (round: MatchRound) => eventMatches.filter(m => m.round === round);
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const [matchesRes, regsRes] = await Promise.all([
+          fetch('/api/matches'),
+          fetch(`/api/registrations${selectedEvent ? `?eventId=${selectedEvent}` : ''}`)
+        ]);
+        if (!mounted) return;
+        if (matchesRes.ok) {
+          const rows = await matchesRes.json();
+          const mapped = rows.map((r: any) => ({
+            id: `M${r.id}`,
+            eventId: r.event_id,
+            round: r.round,
+            player1Id: r.player1_id,
+            player2Id: r.player2_id || undefined,
+            status: r.status,
+            scheduledDate: r.scheduled_date || undefined,
+            scheduledTime: r.meta?.scheduled_time || undefined,
+            venue: r.meta?.venue || undefined,
+            winnerId: r.winner_id || undefined,
+            score: r.meta?.score || undefined,
+            meta: r.meta || {},
+            isBye: false
+          }));
+          setMatchesState(mapped);
+        }
+        if (regsRes.ok) {
+          const rows = await regsRes.json();
+          const mappedRegs = rows.map((r: any) => ({
+            id: String(r.id),
+            employeeId: r.employee_id,
+            employeeName: r.employee_name,
+            providedEmployeeId: r.provided_employee_id,
+            department: r.department,
+            tournamentId: r.tournament_id,
+            eventId: r.event_id,
+            partnerId: r.partner_id,
+            location: r.location,
+            registrationDate: r.registration_date,
+          }));
+          setRegsState(mappedRegs);
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [selectedEvent, refreshKey]);
+
+  const matches = matchesState.filter(m => m.eventId === selectedEvent);
+  const regs = regsState.filter(r => r.eventId === selectedEvent);
+  const participantIds = new Set(regs.filter(r => r.location === locationFilter).map(r => r.employeeId));
+  const visibleMatches = matches.filter(
+    m => participantIds.has(m.player1Id) || (m.player2Id ? participantIds.has(m.player2Id) : false)
+  );
+
+  const hasFixtures = visibleMatches.length > 0;
 
   return (
     <PublicLayout>
@@ -24,15 +89,28 @@ export default function Fixtures() {
         <div className="container mx-auto max-w-7xl">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold mb-2">Tournament Fixtures</h1>
-            <p className="text-muted-foreground">
-              View knockout brackets and match schedules
-            </p>
+            <p className="text-muted-foreground">View knockout brackets and match schedules</p>
+          </div>
+
+          <div className="flex justify-center mb-4 gap-2">
+            <button
+              className={`px-3 py-1 rounded ${locationFilter === 'Hyderabad' ? 'bg-primary text-white' : 'bg-muted'}`}
+              onClick={() => setLocationFilter('Hyderabad')}
+            >
+              Hyderabad
+            </button>
+            <button
+              className={`px-3 py-1 rounded ${locationFilter === 'Bangalore' ? 'bg-primary text-white' : 'bg-muted'}`}
+              onClick={() => setLocationFilter('Bangalore')}
+            >
+              Bangalore
+            </button>
           </div>
 
           <Tabs value={selectedEvent} onValueChange={setSelectedEvent}>
             <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 mb-8">
               {events.map(event => (
-                <TabsTrigger key={event.id} value={event.id} data-testid={`tab-${event.id}`}>
+                <TabsTrigger key={event.id} value={event.id}>
                   {event.name.replace(/Table Tennis |Carrom /, '')}
                 </TabsTrigger>
               ))}
@@ -42,106 +120,40 @@ export default function Fixtures() {
               <TabsContent key={event.id} value={event.id}>
                 <Card>
                   <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="flex items-center gap-2">
-                          <Trophy className="h-5 w-5 text-primary" />
-                          {event.name}
-                        </CardTitle>
-                        <CardDescription className="mt-1">
-                          {event.type} • {event.game}
-                        </CardDescription>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Users className="h-4 w-4" />
-                        <span>{eventMatches.length} matches</span>
-                      </div>
-                    </div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Trophy className="h-5 w-5 text-primary" />
+                      {event.name} - Fixtures
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {eventMatches.length > 0 ? (
-                      <div className="overflow-x-auto">
-                        <div className="flex gap-8 pb-4 min-w-max">
-                          {rounds.map(round => {
-                            const roundMatches = getRoundMatches(round);
-                            if (roundMatches.length === 0) return null;
-
-                            return (
-                              <div key={round} className="flex-shrink-0 w-64">
-                                <h3 className="font-semibold mb-4 text-center text-sm text-muted-foreground">
-                                  {round}
-                                </h3>
-                                <div className="space-y-4">
-                                  {roundMatches.map(match => {
-                                    const player1 = getEmployeeById(match.player1Id);
-                                    const player2 = match.player2Id ? getEmployeeById(match.player2Id) : null;
-                                    const isPlayer1Winner = match.winnerId === match.player1Id;
-                                    const isPlayer2Winner = match.winnerId === match.player2Id;
-
-                                    return (
-                                      <div
-                                        key={match.id}
-                                        className={cn(
-                                          "border rounded-lg p-3 bg-card hover:shadow-md transition-shadow",
-                                          match.status === "Completed" && "border-primary/30"
-                                        )}
-                                        data-testid={`match-${match.id}`}
-                                      >
-                                        <div className="flex items-center justify-between mb-2">
-                                          <StatusBadge status={match.status} />
-                                          {match.scheduledDate && (
-                                            <span className="text-xs text-muted-foreground">
-                                              {new Date(match.scheduledDate).toLocaleDateString()}
-                                            </span>
-                                          )}
-                                        </div>
-                                        
-                                        <div className="space-y-2">
-                                          <div
-                                            className={cn(
-                                              "flex items-center justify-between px-2 py-1.5 rounded",
-                                              isPlayer1Winner && "bg-primary/10 font-semibold"
-                                            )}
-                                          >
-                                            <span className="text-sm truncate">{player1?.name || 'TBD'}</span>
-                                            {isPlayer1Winner && <Trophy className="h-3 w-3 text-primary flex-shrink-0" />}
-                                          </div>
-                                          <div className="text-center text-xs text-muted-foreground">vs</div>
-                                          <div
-                                            className={cn(
-                                              "flex items-center justify-between px-2 py-1.5 rounded",
-                                              isPlayer2Winner && "bg-primary/10 font-semibold"
-                                            )}
-                                          >
-                                            <span className="text-sm truncate">{player2?.name || 'TBD'}</span>
-                                            {isPlayer2Winner && <Trophy className="h-3 w-3 text-primary flex-shrink-0" />}
-                                          </div>
-                                        </div>
-
-                                        {match.score && (
-                                          <div className="mt-2 pt-2 border-t text-xs text-muted-foreground">
-                                            Score: {match.score}
-                                          </div>
-                                        )}
-                                        {match.venue && (
-                                          <div className="mt-1 text-xs text-muted-foreground">
-                                            {match.venue} • {match.scheduledTime}
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
+                    {hasFixtures ? (
+                      <div className="space-y-4">
+                        {visibleMatches.map(match => {
+                          const p1 = regs.find(r => r.employeeId === match.player1Id);
+                          const p2 = match.player2Id ? regs.find(r => r.employeeId === match.player2Id) : null;
+                          const p1Name = p1?.employeeName || match.meta?.player1_name || 'Participant';
+                          const p2Name = p2?.employeeName || match.meta?.player2_name || 'Participant';
+                          const p1IdText = p1 ? ` (${p1.providedEmployeeId || p1.employeeId})` : '';
+                          const p2IdText = p2 ? ` (${p2.providedEmployeeId || p2.employeeId})` : '';
+                          return (
+                            <div key={match.id} className="p-4 bg-muted rounded-md">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <div className="text-sm text-muted-foreground">{match.round}</div>
+                                  <div className="font-medium">{p1Name + p1IdText}{p2 ? ` vs ${p2Name + p2IdText}` : ' (bye)'}</div>
+                                  {match.scheduledDate && (
+                                    <div className="text-xs text-muted-foreground">{match.scheduledDate} {match.scheduledTime}</div>
+                                  )}
                                 </div>
+                                <StatusBadge status={match.status} />
                               </div>
-                            );
-                          })}
-                        </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     ) : (
-                      <div className="text-center py-12">
-                        <p className="text-muted-foreground">
-                          No fixtures generated yet for this event
-                        </p>
+                      <div className="rounded-lg border p-6 text-center text-muted-foreground">
+                        Fixtures will appear here after the admin generates them for the selected location.
                       </div>
                     )}
                   </CardContent>

@@ -1,10 +1,10 @@
+import { useEffect, useState } from 'react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { StatCard } from '@/components/StatCard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Trophy, Users, Calendar, CheckCircle2, Clock, Award } from 'lucide-react';
 import { tournaments } from '@/data/tournaments';
 import { employees } from '@/data/employees';
-import { registrations } from '@/data/registrations';
 import { matches } from '@/data/matches';
 import { champions } from '@/data/champions';
 import { events, getEventById } from '@/data/events';
@@ -14,31 +14,52 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { motion } from 'framer-motion';
 
 export default function Dashboard() {
+  const [regs, setRegs] = useState<any[]>([]);
   const activeTournament = tournaments.find(t => t.status === "In Progress");
   const totalMatches = matches.length;
   const completedMatches = matches.filter(m => m.status === "Completed").length;
   const pendingMatches = matches.filter(m => m.status === "Pending").length;
   const scheduledMatches = matches.filter(m => m.status === "Scheduled").length;
 
+  useEffect(() => {
+    let mounted = true;
+
+    const loadRegistrations = async () => {
+      try {
+        const res = await fetch('/api/registrations');
+        if (!mounted) return;
+        if (res.ok) {
+          const rows = await res.json();
+          setRegs(Array.isArray(rows) ? rows : []);
+        }
+      } catch {
+        if (mounted) setRegs([]);
+      }
+    };
+
+    loadRegistrations();
+    return () => { mounted = false; };
+  }, []);
+
   // Event-wise registrations data
   const eventRegistrations = events.map(event => ({
     name: event.name.replace(/Table Tennis |Carrom /, ''),
-    registrations: registrations.filter(r => r.eventId === event.id).length
+    registrations: regs.filter((r: any) => r.event_id === event.id).length
   }));
 
   // Location-wise registrations data
   const locationData = [
     {
       name: 'Hyderabad',
-      value: registrations.filter(r => {
-        const emp = getEmployeeById(r.employeeId);
+      value: regs.filter((r: any) => {
+        const emp = getEmployeeById(r.employee_id);
         return emp?.location === 'Hyderabad';
       }).length
     },
     {
       name: 'Bangalore',
-      value: registrations.filter(r => {
-        const emp = getEmployeeById(r.employeeId);
+      value: regs.filter((r: any) => {
+        const emp = getEmployeeById(r.employee_id);
         return emp?.location === 'Bangalore';
       }).length
     }
@@ -47,8 +68,8 @@ export default function Dashboard() {
   const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))', 'hsl(var(--chart-5))'];
 
   // Recent registrations
-  const recentRegistrations = registrations
-    .sort((a, b) => new Date(b.registrationDate).getTime() - new Date(a.registrationDate).getTime())
+  const recentRegistrations = [...regs]
+    .sort((a, b) => new Date(b.registration_date).getTime() - new Date(a.registration_date).getTime())
     .slice(0, 5);
 
   // Upcoming matches
@@ -105,7 +126,7 @@ export default function Dashboard() {
           <motion.div variants={item}>
             <StatCard
               title="Total Registrations"
-              value={registrations.length}
+              value={regs.length.toString()}
               icon={Users}
             />
           </motion.div>
@@ -116,20 +137,7 @@ export default function Dashboard() {
               icon={Users}
             />
           </motion.div>
-          <motion.div variants={item}>
-            <StatCard
-              title="Total Matches"
-              value={totalMatches}
-              icon={Calendar}
-            />
-          </motion.div>
-          <motion.div variants={item}>
-            <StatCard
-              title="Pending Matches"
-              value={pendingMatches}
-              icon={Clock}
-            />
-          </motion.div>
+          {/* Match stats removed when no matches are scheduled/completed to keep dashboard focused */}
           <motion.div variants={item}>
             <StatCard
               title="Champions Declared"
@@ -236,7 +244,7 @@ export default function Dashboard() {
                           <p className="text-xs text-muted-foreground">{event?.name}</p>
                         </div>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(reg.registrationDate).toLocaleDateString()}
+                          {new Date(reg.registration_date).toLocaleDateString()}
                         </span>
                       </div>
                     );
@@ -246,77 +254,77 @@ export default function Dashboard() {
             </Card>
           </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Upcoming Matches</CardTitle>
-                <CardDescription>Next 3 scheduled matches</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {upcomingMatches.length > 0 ? upcomingMatches.map(match => {
-                    const player1 = getEmployeeById(match.player1Id);
-                    const player2 = match.player2Id ? getEmployeeById(match.player2Id) : null;
-                    const event = getEventById(match.eventId);
-                    return (
-                      <div key={match.id} className="text-sm border-b border-border pb-2 last:border-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="font-medium text-xs text-primary">{event?.name}</p>
-                          <StatusBadge status={match.status} />
+          {upcomingMatches.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Upcoming Matches</CardTitle>
+                  <CardDescription>Next 3 scheduled matches</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {upcomingMatches.map(match => {
+                      const player1 = getEmployeeById(match.player1Id);
+                      const player2 = match.player2Id ? getEmployeeById(match.player2Id) : null;
+                      const event = getEventById(match.eventId);
+                      return (
+                        <div key={match.id} className="text-sm border-b border-border pb-2 last:border-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="font-medium text-xs text-primary">{event?.name}</p>
+                            <StatusBadge status={match.status} />
+                          </div>
+                          <p className="text-xs">{player1?.name} vs {player2?.name || 'TBD'}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {match.scheduledDate} at {match.scheduledTime} • {match.venue}
+                          </p>
                         </div>
-                        <p className="text-xs">{player1?.name} vs {player2?.name || 'TBD'}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {match.scheduledDate} at {match.scheduledTime} • {match.venue}
-                        </p>
-                      </div>
-                    );
-                  }) : (
-                    <p className="text-sm text-muted-foreground">No upcoming matches scheduled</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-          >
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Recent Results</CardTitle>
-                <CardDescription>Latest 3 completed matches</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {recentResults.length > 0 ? recentResults.map(match => {
-                    const winner = match.winnerId ? getEmployeeById(match.winnerId) : null;
-                    const event = getEventById(match.eventId);
-                    return (
-                      <div key={match.id} className="text-sm border-b border-border pb-2 last:border-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="font-medium text-xs text-primary">{event?.name}</p>
-                          <StatusBadge status={match.status} />
+          {recentResults.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Recent Results</CardTitle>
+                  <CardDescription>Latest 3 completed matches</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {recentResults.map(match => {
+                      const winner = match.winnerId ? getEmployeeById(match.winnerId) : null;
+                      const event = getEventById(match.eventId);
+                      return (
+                        <div key={match.id} className="text-sm border-b border-border pb-2 last:border-0">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="font-medium text-xs text-primary">{event?.name}</p>
+                            <StatusBadge status={match.status} />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="h-3 w-3 text-green-600" />
+                            <p className="text-xs font-medium">{winner?.name}</p>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{match.round} • {match.score}</p>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <CheckCircle2 className="h-3 w-3 text-green-600" />
-                          <p className="text-xs font-medium">{winner?.name}</p>
-                        </div>
-                        <p className="text-xs text-muted-foreground">{match.round} • {match.score}</p>
-                      </div>
-                    );
-                  }) : (
-                    <p className="text-sm text-muted-foreground">No results yet</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
         </div>
       </div>
     </AdminLayout>

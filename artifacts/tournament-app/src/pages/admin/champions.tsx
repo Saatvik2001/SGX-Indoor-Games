@@ -37,15 +37,15 @@ export default function AdminChampions() {
                         <Award className="h-5 w-5 text-yellow-600" />
                         <span className="text-sm font-semibold text-yellow-600">CHAMPION</span>
                       </div>
-                      <p className="font-bold text-lg">{winner?.name}</p>
-                      <p className="text-sm text-muted-foreground">{winner?.department} • {winner?.location}</p>
+                      <p className="font-bold text-lg">{winner?.name || 'TBD'}</p>
+                      <p className="text-sm text-muted-foreground">{winner?.location || 'Unknown'}</p>
                     </div>
 
                     {runnerUp && (
                       <div className="p-4 bg-muted border rounded-lg">
                         <p className="text-sm font-semibold text-muted-foreground mb-2">RUNNER-UP</p>
-                        <p className="font-medium">{runnerUp.name}</p>
-                        <p className="text-sm text-muted-foreground">{runnerUp.department} • {runnerUp.location}</p>
+                        <p className="font-medium">{runnerUp?.name || 'TBD'}</p>
+                        <p className="text-sm text-muted-foreground">{runnerUp?.location || 'Unknown'}</p>
                       </div>
                     )}
 

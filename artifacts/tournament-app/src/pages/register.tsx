@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PublicLayout } from '@/components/PublicLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,21 +8,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { events, getEventById } from '@/data/events';
-import { employees, getEmployeesByLocation, getEmployeeById } from '@/data/employees';
-import { addRegistration } from '@/data/registrations';
 import { Trophy, CheckCircle2, UserPlus } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Register() {
   const { toast } = useToast();
+  // collect provided Employee ID and also generate an internal anonymized id
   const [employeeId, setEmployeeId] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [department, setDepartment] = useState('');
   const [location, setLocation] = useState<'Hyderabad' | 'Bangalore' | ''>('');
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [partners, setPartners] = useState<Record<string, string>>({});
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [hideEventSelection, setHideEventSelection] = useState(false);
 
   const availableEvents = location ? events : [];
   const doublesEvents = selectedEvents.filter(eventId => {
@@ -30,62 +29,80 @@ export default function Register() {
     return event?.type === 'Doubles';
   });
 
-  const locationEmployees = location ? getEmployeesByLocation(location as any) : [];
-
-  const handleEmployeeIdChange = (value: string) => {
-    setEmployeeId(value);
-    const employee = getEmployeeById(value);
-    if (employee) {
-      setName(employee.name);
-      setEmail(employee.email);
-      setDepartment(employee.department);
-      setLocation(employee.location);
-    }
-  };
+  const locationEmployees = [];
 
   const handleEventToggle = (eventId: string, checked: boolean) => {
     if (checked) {
       setSelectedEvents([...selectedEvents, eventId]);
     } else {
       setSelectedEvents(selectedEvents.filter(id => id !== eventId));
-      const newPartners = { ...partners };
-      delete newPartners[eventId];
-      setPartners(newPartners);
+      // partner selection removed; auto-pairing handled by server
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate doubles partner selection
-    for (const eventId of doublesEvents) {
-      if (!partners[eventId]) {
-        toast({
-          title: "Partner Required",
-          description: `Please select a partner for ${getEventById(eventId)?.name}`,
-          variant: "destructive"
-        });
-        return;
-      }
-    }
+    // Partner selection removed: server will auto-assign partners for Doubles
 
-    // Submit registrations
-    selectedEvents.forEach(eventId => {
-      addRegistration({
-        employeeId,
-        tournamentId: 'T001',
-        eventId,
-        partnerId: partners[eventId],
-        registrationDate: new Date().toISOString()
+    const anonId = `ANON${String(Math.floor(Math.random() * 1e9)).padStart(9, '0')}`;
+    const employeeIdValue = employeeId.trim() || anonId;
+
+    // Build payloads for each selected event
+    const payloads = selectedEvents.map(eventId => ({
+      employeeId: employeeIdValue,
+      providedEmployeeId: employeeIdValue,
+      employeeName: name,
+      // department intentionally omitted
+      tournamentId: 'T001',
+      eventId,
+      eventType: getEventById(eventId)?.type,
+      partnerId: undefined,
+      location,
+      registrationDate: new Date().toISOString()
+    }));
+
+    try {
+      const res = await fetch('/api/registrations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registrations: payloads })
       });
-    });
 
-    setIsSubmitted(true);
-    toast({
-      title: "Registration Successful!",
-      description: `You have been registered for ${selectedEvents.length} event(s).`
-    });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || 'server error');
+      }
+
+      setIsSubmitted(true);
+      toast({
+        title: 'Registration Successful!',
+        description: `You have been registered for ${selectedEvents.length} event(s).`
+      });
+    } catch (err) {
+      toast({
+        title: 'Registration Failed',
+        description: 'Could not complete registration. Please try again when the database is available.'
+      });
+      return;
+    }
   };
+
+  // If admin has set open events (admin can set localStorage 'openEvents' as csv of eventIds), preselect and hide event selection
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const raw = window.localStorage.getItem('openEvents');
+        if (raw) {
+          const ids = raw.split(',').map(s => s.trim()).filter(Boolean);
+          if (ids.length) {
+            setSelectedEvents(ids);
+            setHideEventSelection(true);
+          }
+        }
+      }
+    } catch (e) {}
+  }, []);
 
   if (isSubmitted) {
     return (
@@ -98,15 +115,17 @@ export default function Register() {
           >
             <Card className="border-primary/50">
               <CardHeader className="text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="rounded-full bg-green-500/10 p-4">
-                    <CheckCircle2 className="h-12 w-12 text-green-600" />
+                <div className="space-y-2">
+                  <div className="flex justify-center mb-4">
+                    <div className="rounded-full bg-green-500/10 p-4">
+                      <CheckCircle2 className="h-12 w-12 text-green-600" />
+                    </div>
                   </div>
+                  <CardTitle className="text-2xl">Registration Complete</CardTitle>
+                  <CardDescription>
+                    Thank you — your registration has been recorded. The admin will review registrations.
+                  </CardDescription>
                 </div>
-                <CardTitle className="text-2xl">Registration Successful!</CardTitle>
-                <CardDescription>
-                  You have been successfully registered for the tournament.
-                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="bg-muted p-4 rounded-lg space-y-2 text-sm">
@@ -128,30 +147,15 @@ export default function Register() {
                   <ul className="text-sm text-muted-foreground space-y-1">
                     {selectedEvents.map(eventId => {
                       const event = getEventById(eventId);
-                      const partner = partners[eventId];
-                      const partnerEmployee = partner ? getEmployeeById(partner) : null;
                       return (
                         <li key={eventId} className="flex items-center gap-2">
                           <Trophy className="h-4 w-4 text-primary" />
                           {event?.name}
-                          {partnerEmployee && (
-                            <span className="text-xs">
-                              (with {partnerEmployee.name})
-                            </span>
-                          )}
                         </li>
                       );
                     })}
                   </ul>
                 </div>
-                <Button
-                  onClick={() => setIsSubmitted(false)}
-                  variant="outline"
-                  className="w-full"
-                  data-testid="button-register-another"
-                >
-                  Register Another Employee
-                </Button>
               </CardContent>
             </Card>
           </motion.div>
@@ -191,39 +195,32 @@ export default function Register() {
                   
                   <div className="space-y-2">
                     <Label htmlFor="employeeId">Employee ID</Label>
-                    <Select value={employeeId} onValueChange={handleEmployeeIdChange} required>
-                      <SelectTrigger id="employeeId" data-testid="select-employee-id">
-                        <SelectValue placeholder="Select your Employee ID" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {employees.map(emp => (
-                          <SelectItem key={emp.id} value={emp.id}>
-                            {emp.id} - {emp.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Input id="employeeId" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} data-testid="input-employee-id" />
                   </div>
-
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="name">Name</Label>
-                      <Input id="name" value={name} disabled data-testid="input-name" />
+                      <Input id="name" value={name} onChange={(e) => setName(e.target.value)} data-testid="input-name" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
-                      <Input id="email" value={email} disabled data-testid="input-email" />
+                      <Input id="email" value={email} onChange={(e) => setEmail(e.target.value)} data-testid="input-email" />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="department">Department</Label>
-                      <Input id="department" value={department} disabled data-testid="input-department" />
-                    </div>
+                    
                     <div className="space-y-2">
                       <Label htmlFor="location">Location</Label>
-                      <Input id="location" value={location} disabled data-testid="input-location" />
+                      <Select value={location} onValueChange={(v) => setLocation(v as any)}>
+                        <SelectTrigger id="location" data-testid="select-location">
+                          <SelectValue placeholder="Select location" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Hyderabad">Hyderabad</SelectItem>
+                          <SelectItem value="Bangalore">Bangalore</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
@@ -251,29 +248,7 @@ export default function Register() {
                           </div>
 
                           {/* Partner Selection for Doubles */}
-                          {selectedEvents.includes(event.id) && event.type === 'Doubles' && (
-                            <div className="ml-6 space-y-2">
-                              <Label htmlFor={`partner-${event.id}`}>Select Partner</Label>
-                              <Select
-                                value={partners[event.id] || ''}
-                                onValueChange={(value) => setPartners({ ...partners, [event.id]: value })}
-                                required
-                              >
-                                <SelectTrigger id={`partner-${event.id}`} data-testid={`select-partner-${event.id}`}>
-                                  <SelectValue placeholder="Choose your partner" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {locationEmployees
-                                    .filter(emp => emp.id !== employeeId)
-                                    .map(emp => (
-                                      <SelectItem key={emp.id} value={emp.id}>
-                                        {emp.name} ({emp.department})
-                                      </SelectItem>
-                                    ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          )}
+                          {/* Partner selection removed - server will auto-assign partners for Doubles */}
                         </div>
                       ))}
                     </div>
@@ -284,7 +259,7 @@ export default function Register() {
                   <Button
                     type="submit"
                     className="w-full"
-                    disabled={!employeeId || selectedEvents.length === 0}
+                    disabled={!employeeId || !name || selectedEvents.length === 0}
                     data-testid="button-submit-registration"
                   >
                     Complete Registration

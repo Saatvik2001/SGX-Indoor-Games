@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,11 +6,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Calendar, Clock, MapPin, Edit } from 'lucide-react';
-import { matches, updateMatch } from '@/data/matches';
-import { getEmployeeById } from '@/data/employees';
 import { getEventById } from '@/data/events';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useToast } from '@/hooks/use-toast';
+import type { Registration } from '@/data/registrations';
+
+interface MatchRow {
+  id: string;
+  eventId: string;
+  round: string;
+  player1Id: string;
+  player2Id?: string;
+  status: 'Pending' | 'Scheduled' | 'Completed';
+  scheduledDate?: string;
+  scheduledTime?: string;
+  venue?: string;
+  winnerId?: string;
+  score?: string;
+}
 
 export default function Schedule() {
   const { toast } = useToast();
@@ -18,27 +31,97 @@ export default function Schedule() {
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
   const [venue, setVenue] = useState('');
+  const [matchState, setMatchState] = useState<MatchRow[]>([]);
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
 
-  const pendingAndScheduledMatches = matches.filter(
-    m => m.status === "Pending" || m.status === "Scheduled"
+  useEffect(() => {
+    let mounted = true;
+    const fetchData = async () => {
+      try {
+        const [matchesRes, regsRes] = await Promise.all([
+          fetch('/api/matches'),
+          fetch('/api/registrations')
+        ]);
+        if (!mounted) return;
+
+        if (matchesRes.ok) {
+          const rows = await matchesRes.json();
+          const mapped = rows.map((r: any) => ({
+            id: `M${r.id}`,
+            eventId: r.event_id,
+            round: r.round,
+            player1Id: r.player1_id,
+            player2Id: r.player2_id || undefined,
+            status: r.status,
+            scheduledDate: r.scheduled_date || undefined,
+            scheduledTime: r.meta?.scheduled_time || undefined,
+            venue: r.meta?.venue || undefined,
+            winnerId: r.winner_id || undefined,
+            score: r.meta?.score || undefined,
+          }));
+          setMatchState(mapped);
+        }
+
+        if (regsRes.ok) {
+          const rows = await regsRes.json();
+          setRegistrations(rows.map((r: any) => ({
+            id: String(r.id),
+            employeeId: r.employee_id,
+            employeeName: r.employee_name,
+            providedEmployeeId: r.provided_employee_id,
+            department: r.department,
+            tournamentId: r.tournament_id,
+            eventId: r.event_id,
+            partnerId: r.partner_id,
+            location: r.location,
+            registrationDate: r.registration_date,
+          })));
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    fetchData();
+    return () => { mounted = false; };
+  }, []);
+
+  const pendingAndScheduledMatches = matchState.filter(
+    m => m.status === 'Pending' || m.status === 'Scheduled'
   );
 
-  const handleSchedule = () => {
-    if (selectedMatch && scheduleDate && scheduleTime && venue) {
-      updateMatch(selectedMatch, {
-        scheduledDate: scheduleDate,
+  const handleSchedule = async () => {
+    if (!selectedMatch || !scheduleDate || !scheduleTime || !venue) return;
+    const numericId = selectedMatch.replace(/^M/, '');
+    const scheduled_date = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+    const meta = { scheduled_time: scheduleTime, venue };
+
+    try {
+      const res = await fetch(`/api/matches/${numericId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduled_date, meta, status: 'Scheduled' })
+      });
+
+      if (!res.ok) {
+        toast({ title: 'Schedule failed', description: 'Server error' });
+        return;
+      }
+
+      setMatchState(prev => prev.map(m => m.id === selectedMatch ? {
+        ...m,
+        scheduledDate: scheduled_date,
         scheduledTime: scheduleTime,
         venue,
-        status: "Scheduled"
-      });
-      toast({
-        title: "Match Scheduled",
-        description: "Match has been successfully scheduled."
-      });
+        status: 'Scheduled'
+      } : m));
+
+      toast({ title: 'Match Scheduled', description: 'Match has been successfully scheduled.' });
       setSelectedMatch(null);
       setScheduleDate('');
       setScheduleTime('');
       setVenue('');
+    } catch (e) {
+      toast({ title: 'Schedule failed', description: 'Network error' });
     }
   };
 
@@ -47,9 +130,7 @@ export default function Schedule() {
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Match Scheduling</h1>
-          <p className="text-muted-foreground">
-            Schedule match dates, times, and venues
-          </p>
+          <p className="text-muted-foreground">Schedule match dates, times, and venues</p>
         </div>
 
         <Card>
@@ -59,9 +140,10 @@ export default function Schedule() {
           <CardContent>
             <div className="space-y-4">
               {pendingAndScheduledMatches.map(match => {
-                const player1 = getEmployeeById(match.player1Id);
-                const player2 = match.player2Id ? getEmployeeById(match.player2Id) : null;
+                const player1 = registrations.find(r => r.employeeId === match.player1Id);
+                const player2 = match.player2Id ? registrations.find(r => r.employeeId === match.player2Id) : null;
                 const event = getEventById(match.eventId);
+                const displayDate = match.scheduledDate ? new Date(match.scheduledDate).toISOString().slice(0, 10) : '';
 
                 return (
                   <div
@@ -78,9 +160,13 @@ export default function Schedule() {
                         </div>
 
                         <div className="flex items-center gap-2 text-sm">
-                          <span className="font-medium">{player1?.name}</span>
+                          <span className="font-medium">
+                            {player1 ? `${player1.employeeName} (${player1.providedEmployeeId || player1.employeeId})` : 'TBD'}
+                          </span>
                           <span className="text-muted-foreground">vs</span>
-                          <span className="font-medium">{player2?.name || 'TBD'}</span>
+                          <span className="font-medium">
+                            {player2 ? `${player2.employeeName} (${player2.providedEmployeeId || player2.employeeId})` : 'TBD'}
+                          </span>
                         </div>
 
                         {match.scheduledDate && (
@@ -108,22 +194,20 @@ export default function Schedule() {
                             size="sm"
                             onClick={() => {
                               setSelectedMatch(match.id);
-                              setScheduleDate(match.scheduledDate || '');
+                              setScheduleDate(displayDate);
                               setScheduleTime(match.scheduledTime || '');
                               setVenue(match.venue || '');
                             }}
                             data-testid={`button-schedule-${match.id}`}
                           >
                             <Edit className="h-4 w-4 mr-2" />
-                            {match.status === "Scheduled" ? "Edit" : "Schedule"}
+                            {match.status === 'Scheduled' ? 'Edit' : 'Schedule'}
                           </Button>
                         </DialogTrigger>
                         <DialogContent>
                           <DialogHeader>
                             <DialogTitle>Schedule Match</DialogTitle>
-                            <DialogDescription>
-                              Set the date, time, and venue for this match
-                            </DialogDescription>
+                            <DialogDescription>Set the date, time, and venue for this match</DialogDescription>
                           </DialogHeader>
                           <div className="space-y-4 pt-4">
                             <div className="space-y-2">
@@ -156,11 +240,7 @@ export default function Schedule() {
                                 data-testid="input-venue"
                               />
                             </div>
-                            <Button
-                              onClick={handleSchedule}
-                              className="w-full"
-                              data-testid="button-save-schedule"
-                            >
+                            <Button onClick={handleSchedule} className="w-full" data-testid="button-save-schedule">
                               Save Schedule
                             </Button>
                           </div>
@@ -172,9 +252,7 @@ export default function Schedule() {
               })}
 
               {pendingAndScheduledMatches.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  No matches available for scheduling
-                </div>
+                <div className="text-center py-12 text-muted-foreground">No matches available for scheduling</div>
               )}
             </div>
           </CardContent>
@@ -183,3 +261,4 @@ export default function Schedule() {
     </AdminLayout>
   );
 }
+

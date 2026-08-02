@@ -1,10 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import { useLocation } from 'wouter';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { registrations } from '@/data/registrations';
-import { getEmployeeById } from '@/data/employees';
+import { type Registration } from '@/data/registrations';
 import { getEventById, events } from '@/data/events';
 import { Users, Search } from 'lucide-react';
 import {
@@ -20,8 +20,8 @@ import {
 import { Button } from '@/components/ui/button';
 
 type RegistrationRow = {
+  providedEmployeeId: string;
   id: string;
-  employeeId: string;
   employeeName: string;
   department: string;
   location: string;
@@ -35,24 +35,70 @@ export default function Registrations() {
   const [eventFilter, setEventFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
 
+  const [regs, setRegs] = useState<Registration[]>([]);
+  const [, setLocation] = useLocation();
+
+  const query = useMemo(() => new URLSearchParams(typeof window !== 'undefined' ? window.location.search : ''), []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchRegs = async () => {
+      try {
+        const eventId = query.get('event');
+        const params = new URLSearchParams();
+        if (eventId) params.set('eventId', eventId);
+        const url = '/api/registrations' + (params.toString() ? `?${params.toString()}` : '');
+        const res = await fetch(url);
+        if (res.ok) {
+          const rows = await res.json();
+          if (mounted) setRegs(rows.map((r: any) => ({
+            id: String(r.id),
+            employeeId: r.employee_id,
+            providedEmployeeId: r.provided_employee_id,
+            employeeName: r.employee_name,
+            department: r.department || '',
+            location: r.location,
+            eventId: r.event_id,
+            partnerId: r.partner_id,
+            partnerName: r.partner_id ? 'Auto-paired' : '-',
+            registrationDate: r.registration_date,
+          })));
+          return;
+        }
+      } catch (err) {
+        if (mounted) setRegs([]);
+      }
+    };
+
+    fetchRegs();
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'registrations:update') {
+        fetchRegs();
+      }
+    };
+
+    window.addEventListener('storage', onStorage);
+    return () => { mounted = false; window.removeEventListener('storage', onStorage); };
+  }, []);
+
   const data = useMemo<RegistrationRow[]>(() => {
-    return registrations.map(reg => {
-      const employee = getEmployeeById(reg.employeeId);
+    return regs.map(reg => {
       const event = getEventById(reg.eventId);
-      const partner = reg.partnerId ? getEmployeeById(reg.partnerId) : null;
 
       return {
         id: reg.id,
-        employeeId: reg.employeeId,
-        employeeName: employee?.name || 'Unknown',
-        department: employee?.department || 'Unknown',
-        location: employee?.location || 'Unknown',
+        providedEmployeeId: reg.providedEmployeeId || '-',
+        employeeName: reg.employeeName || 'Unknown',
+        department: reg.department || 'Unknown',
+        location: reg.location || 'Unknown',
         eventName: event?.name || 'Unknown',
-        partner: partner ? partner.name : '-',
+        partner: reg.partnerName || '-',
         registrationDate: new Date(reg.registrationDate).toLocaleDateString(),
       };
     });
-  }, []);
+  }, [regs]);
 
   const filteredData = useMemo(() => {
     let filtered = data;
@@ -74,7 +120,7 @@ export default function Registrations() {
   const columnHelper = createColumnHelper<RegistrationRow>();
   
   const columns = useMemo<ColumnDef<RegistrationRow, any>[]>(() => [
-    columnHelper.accessor('employeeId', {
+    columnHelper.accessor('providedEmployeeId', {
       header: 'Employee ID',
       cell: info => <span className="font-mono text-sm">{info.getValue()}</span>,
     }),
