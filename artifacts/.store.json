@@ -203,6 +203,18 @@
       "partner_id": null,
       "location": "Hyderabad",
       "registration_date": "2026-08-02T23:04:55Z"
+    },
+    {
+      "id": 18,
+      "employee_id": "23456",
+      "provided_employee_id": "23456",
+      "employee_name": "soutred",
+      "department": null,
+      "tournament_id": "T001",
+      "event_id": "E001",
+      "partner_id": null,
+      "location": "Hyderabad",
+      "registration_date": "2026-08-02T23:21:50.067Z"
     }
   ],
   "matches": [
@@ -217,7 +229,8 @@
       "scheduled_date": null,
       "meta": {
         "location": "Hyderabad",
-        "bracket_index": 0
+        "bracket_index": 0,
+        "round_level": 0
       }
     },
     {
@@ -231,7 +244,8 @@
       "scheduled_date": null,
       "meta": {
         "location": "Hyderabad",
-        "bracket_index": 1
+        "bracket_index": 1,
+        "round_level": 0
       }
     },
     {
@@ -245,7 +259,8 @@
       "scheduled_date": null,
       "meta": {
         "location": "Hyderabad",
-        "bracket_index": 2
+        "bracket_index": 2,
+        "round_level": 0
       }
     },
     {
@@ -259,7 +274,8 @@
       "scheduled_date": null,
       "meta": {
         "location": "Hyderabad",
-        "bracket_index": 3
+        "bracket_index": 3,
+        "round_level": 0
       }
     },
     {
@@ -273,7 +289,8 @@
       "scheduled_date": null,
       "meta": {
         "location": "Hyderabad",
-        "bracket_index": 4
+        "bracket_index": 4,
+        "round_level": 0
       }
     },
     {
@@ -281,13 +298,14 @@
       "event_id": "E001",
       "round": "Round 1",
       "player1_id": "EMP05",
-      "player2_id": null,
+      "player2_id": "23456",
       "winner_id": null,
       "status": "Pending",
       "scheduled_date": null,
       "meta": {
         "location": "Hyderabad",
-        "bracket_index": 5
+        "bracket_index": 5,
+        "round_level": 0
       }
     },
     {
@@ -301,7 +319,8 @@
       "scheduled_date": null,
       "meta": {
         "location": "Hyderabad",
-        "bracket_index": 0
+        "bracket_index": 0,
+        "round_level": 1
       }
     },
     {
@@ -315,7 +334,8 @@
       "scheduled_date": null,
       "meta": {
         "location": "Hyderabad",
-        "bracket_index": 1
+        "bracket_index": 1,
+        "round_level": 1
       }
     },
     {
@@ -329,7 +349,8 @@
       "scheduled_date": null,
       "meta": {
         "location": "Hyderabad",
-        "bracket_index": 0
+        "bracket_index": 0,
+        "round_level": 2
       }
     },
     {
@@ -343,13 +364,14 @@
       "scheduled_date": null,
       "meta": {
         "location": "Hyderabad",
-        "bracket_index": 0
+        "bracket_index": 0,
+        "round_level": 3
       }
     },
     {
       "id": 11,
       "event_id": "E001",
-      "round": "Round 1",
+      "round": "Quarter Final",
       "player1_id": "EMP02",
       "player2_id": "EMP04",
       "winner_id": null,
@@ -357,13 +379,14 @@
       "scheduled_date": null,
       "meta": {
         "location": "Bangalore",
-        "bracket_index": 0
+        "bracket_index": 0,
+        "round_level": 0
       }
     },
     {
       "id": 12,
       "event_id": "E001",
-      "round": "Round 1",
+      "round": "Quarter Final",
       "player1_id": "EMP06",
       "player2_id": "EMP08",
       "winner_id": null,
@@ -371,13 +394,14 @@
       "scheduled_date": null,
       "meta": {
         "location": "Bangalore",
-        "bracket_index": 1
+        "bracket_index": 1,
+        "round_level": 0
       }
     },
     {
       "id": 13,
       "event_id": "E001",
-      "round": "Round 1",
+      "round": "Quarter Final",
       "player1_id": "EMP02",
       "player2_id": "EMP04",
       "winner_id": null,
@@ -385,25 +409,12 @@
       "scheduled_date": null,
       "meta": {
         "location": "Bangalore",
-        "bracket_index": 2
+        "bracket_index": 2,
+        "round_level": 0
       }
     },
     {
       "id": 14,
-      "event_id": "E001",
-      "round": "Quarter Final",
-      "player1_id": "",
-      "player2_id": null,
-      "winner_id": null,
-      "status": "Pending",
-      "scheduled_date": null,
-      "meta": {
-        "location": "Bangalore",
-        "bracket_index": 0
-      }
-    },
-    {
-      "id": 15,
       "event_id": "E001",
       "round": "Semi Final",
       "player1_id": "",
@@ -413,11 +424,12 @@
       "scheduled_date": null,
       "meta": {
         "location": "Bangalore",
-        "bracket_index": 0
+        "bracket_index": 0,
+        "round_level": 1
       }
     },
     {
-      "id": 16,
+      "id": 15,
       "event_id": "E001",
       "round": "Final",
       "player1_id": "",
@@ -427,7 +439,8 @@
       "scheduled_date": null,
       "meta": {
         "location": "Bangalore",
-        "bracket_index": 0
+        "bracket_index": 0,
+        "round_level": 2
       }
     }
   ],

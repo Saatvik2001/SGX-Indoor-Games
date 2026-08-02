@@ -41,6 +41,7 @@ export default function AdminFixtures() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const matchRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [connectors, setConnectors] = useState<Array<{ x1: number; y1: number; x2: number; y2: number }>>([]);
+  const [champion, setChampion] = useState<{ tournamentId: string; eventId: string; championId?: string; championName?: string } | null>(null);
   const [selectedWinners, setSelectedWinners] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
@@ -214,6 +215,17 @@ export default function AdminFixtures() {
       es.addEventListener('match:update', () => {
         fetchMatches();
       });
+      es.addEventListener('tournament:completed', (ev: any) => {
+        try {
+          const payload = JSON.parse(ev.data);
+          setChampion({ tournamentId: payload.tournamentId, eventId: payload.eventId, championId: payload.championId, championName: payload.championName });
+          toast({ title: 'Tournament Completed', description: `${payload.championName || 'Champion'} declared.` });
+          // refresh matches to reflect final state
+          fetchMatches();
+        } catch (err) {
+          // ignore parse errors
+        }
+      });
     } catch (e) {
       // fallback to storage events if SSE unsupported
       const onStorage = (e: StorageEvent) => {
@@ -316,6 +328,17 @@ export default function AdminFixtures() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                    {champion && champion.eventId === selectedEvent && (
+                      <div className="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 p-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-sm font-semibold">Champion Declared</div>
+                            <div className="text-lg font-bold">{champion.championName || 'Champion'}</div>
+                          </div>
+                          <div className="text-sm text-muted-foreground">Tournament Completed</div>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-center gap-3 mb-4">
                       <label className="text-sm">Location:</label>
                       <div className="flex items-center gap-2">
