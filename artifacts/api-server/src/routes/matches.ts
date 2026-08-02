@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { logger } from '../lib/logger';
 import { db, pool } from '@workspace/db';
 import { fallbackStore } from '../lib/fallback-store';
+import sse from '../lib/sse';
 
 const router = Router();
 
@@ -107,6 +108,8 @@ router.put('/:id', async (req, res) => {
           }
         }
       }
+      // emit SSE update for this event
+      try { sse.emitEvent(existingRow.event_id, 'match:update', { matchId: updatedMatch.id, eventId: existingRow.event_id }); } catch (e) {}
     }
 
     const finalRes = await pool.query('SELECT * FROM matches WHERE id = $1', [id]);

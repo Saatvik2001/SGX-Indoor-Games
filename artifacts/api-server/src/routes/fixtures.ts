@@ -81,4 +81,23 @@ router.post("/generate", async (req, res) => {
   }
 });
 
+// SSE subscribe to event updates
+router.get('/stream/:eventId', (req, res) => {
+  const { eventId } = req.params as { eventId: string };
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive'
+  });
+  res.write('\n');
+  const clientId = String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8);
+  const client = { id: clientId, res };
+  // add
+  const sseModule = require('../lib/sse').default;
+  sseModule.addClient(eventId, client);
+  req.on('close', () => {
+    sseModule.removeClient(eventId, clientId);
+  });
+});
+
 export default router;

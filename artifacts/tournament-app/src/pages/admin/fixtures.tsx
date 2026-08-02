@@ -201,13 +201,22 @@ export default function AdminFixtures() {
   };
 
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'fixtures:update') {
+    // SSE real-time update subscription
+    let es: EventSource | null = null;
+    try {
+      es = new EventSource(`/api/fixtures/stream/${selectedEvent}`);
+      es.addEventListener('match:update', () => {
         fetchMatches();
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+      });
+    } catch (e) {
+      // fallback to storage events if SSE unsupported
+      const onStorage = (e: StorageEvent) => {
+        if (e.key === 'fixtures:update') fetchMatches();
+      };
+      window.addEventListener('storage', onStorage);
+      return () => window.removeEventListener('storage', onStorage);
+    }
+    return () => { if (es) es.close(); };
   }, []);
 
   // simple polling fallback for realtime updates
