@@ -255,11 +255,17 @@ export default function AdminFixtures() {
                 <CardContent>
                     <div className="flex items-center gap-3 mb-4">
                       <label className="text-sm">Location:</label>
-                      <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)} className="rounded border px-2 py-1">
-                        <option value="All">All</option>
-                        <option value="Hyderabad">Hyderabad</option>
-                        <option value="Bangalore">Bangalore</option>
-                      </select>
+                      <div className="flex items-center gap-2">
+                        {['All', 'Hyderabad', 'Bangalore'].map(loc => (
+                          <button
+                            key={loc}
+                            onClick={() => setLocationFilter(loc as any)}
+                            className={cn('px-4 py-2 rounded-md', locationFilter === loc ? 'bg-primary text-white' : 'bg-muted')}
+                          >
+                            {loc}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   {loading ? (
                     <div className="text-center py-12 text-muted-foreground">Loading matches…</div>
