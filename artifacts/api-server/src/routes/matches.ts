@@ -110,6 +110,25 @@ router.put('/:id', async (req, res) => {
       }
       // emit SSE update for this event
       try { sse.emitEvent(existingRow.event_id, 'match:update', { matchId: updatedMatch.id, eventId: existingRow.event_id }); } catch (e) {}
+      // check if this was the final (max round) and mark tournament Completed
+      try {
+        const maxRes = await pool.query(
+          `SELECT MAX(((meta->> 'round_level')::int)) AS max_round FROM matches WHERE event_id = $1`,
+          [existingRow.event_id]
+        );
+        const maxRound = Number(maxRes.rows[0]?.max_round ?? 0);
+        if (!Number.isNaN(maxRound) && roundLevel >= maxRound) {
+          // this was the final match; mark tournament Completed
+          const evRes = await pool.query('SELECT * FROM events WHERE id = $1', [existingRow.event_id]);
+          const ev = evRes.rows[0];
+          if (ev && ev.tournament_id) {
+            await pool.query(`UPDATE tournaments SET status = 'Completed' WHERE id = $1`, [ev.tournament_id]);
+            try { sse.emitEvent(existingRow.event_id, 'tournament:completed', { eventId: existingRow.event_id, tournamentId: ev.tournament_id, championId: winnerId, championName: newMeta.winner_name }); } catch (e) {}
+          }
+        }
+      } catch (e) {
+        // ignore champion marking failures
+      }
     }
 
     const finalRes = await pool.query('SELECT * FROM matches WHERE id = $1', [id]);

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useRef } from 'react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,9 @@ export default function AdminFixtures() {
   const [locationFilter, setLocationFilter] = useState<'All' | string>('All');
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [eventMatches, setEventMatches] = useState<MatchRow[]>([]);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const matchRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [connectors, setConnectors] = useState<Array<{ x1: number; y1: number; x2: number; y2: number }>>([]);
   const [selectedWinners, setSelectedWinners] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
 
@@ -88,6 +92,8 @@ export default function AdminFixtures() {
         disqualifiedPlayerIds: Array.isArray(r.meta?.disqualified_player_ids) ? r.meta.disqualified_player_ids : []
       }));
       setEventMatches(serverMatches);
+      // reset connectors cache so it recomputes after render
+      setTimeout(() => setConnectors([]), 50);
     } catch {
       toast({ title: 'Unable to load matches', description: 'There was an error fetching fixtures.' });
     } finally {
@@ -226,6 +232,54 @@ export default function AdminFixtures() {
     return () => clearInterval(id);
   }, [selectedEvent]);
 
+  // compute SVG connectors between rounds after matches render
+  useEffect(() => {
+    if (!containerRef.current) return;
+    // gather rects for each match
+    const rects: Record<string, DOMRect> = {};
+    Object.keys(matchRefs.current).forEach(k => {
+      const el = matchRefs.current[k];
+      if (el) rects[k] = el.getBoundingClientRect();
+    });
+    if (Object.keys(rects).length === 0) return;
+
+    const rootRect = containerRef.current.getBoundingClientRect();
+    const newConns: Array<{ x1: number; y1: number; x2: number; y2: number }> = [];
+
+    // for each match in a round, connect to the next round's match based on bracket_index
+    for (const m of selectedEventMatches) {
+      const id = m.id; // 'M123'
+      const metaBracket = (m as any).roundLevel;
+      // find next round level
+      const curLevel = Number(m.roundLevel ?? 0);
+      const nextLevel = roundLevels[roundLevels.indexOf(curLevel) + 1];
+      if (nextLevel === undefined) continue;
+      // compute nextMatch index: floor(bracket_index/2) stored in server meta.bracket_index
+      // find server match to use: matches with nextLevel where their meta.bracket_index matches Math.floor(bracket/2)
+      const thisMatchRaw = eventMatches.find(x => `M${(x as any).id?.toString?.()}` === id) as any || null;
+      const bracketIndex = Number((thisMatchRaw && thisMatchRaw.roundLevel) ? (thisMatchRaw as any).roundLevel : 0);
+      // fallback: pair by order — map index in current round to index in next round
+      const curRoundMatches = eventMatches.filter(x => Number(x.roundLevel) === curLevel).sort((a, b) => (a.id > b.id ? 1 : -1));
+      const idx = curRoundMatches.findIndex(x => x.id === id);
+      if (idx === -1) continue;
+      const targetIdx = Math.floor(idx / 2);
+      const nextRoundMatches = eventMatches.filter(x => Number(x.roundLevel) === nextLevel).sort((a, b) => (a.id > b.id ? 1 : -1));
+      const targetMatch = nextRoundMatches[targetIdx];
+      if (!targetMatch) continue;
+
+      const fromRect = rects[id];
+      const toRect = rects[targetMatch.id];
+      if (!fromRect || !toRect) continue;
+      const x1 = fromRect.right - rootRect.left;
+      const y1 = fromRect.top + fromRect.height / 2 - rootRect.top;
+      const x2 = toRect.left - rootRect.left;
+      const y2 = toRect.top + toRect.height / 2 - rootRect.top;
+      newConns.push({ x1, y1, x2, y2 });
+    }
+
+    setConnectors(newConns);
+  }, [eventMatches, roundLevels, selectedEventMatches]);
+
   return (
     <AdminLayout>
       <div className="p-6 space-y-6">
@@ -279,7 +333,15 @@ export default function AdminFixtures() {
                   {loading ? (
                     <div className="text-center py-12 text-muted-foreground">Loading matches…</div>
                   ) : selectedEventMatches.length > 0 ? (
-                    <div className="overflow-x-auto">
+                    <div className="relative overflow-x-auto" ref={containerRef}>
+                      <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
+                        {connectors.map((c, i) => (
+                          <g key={`conn-${i}`}>
+                            <path d={`M ${c.x1} ${c.y1} C ${c.x1 + 40} ${c.y1} ${c.x2 - 40} ${c.y2} ${c.x2} ${c.y2}`} stroke="#cbd5e1" strokeWidth={2} fill="none" />
+                            <circle cx={c.x2} cy={c.y2} r={3} fill="#0ea5a4" />
+                          </g>
+                        ))}
+                      </svg>
                       <div className="flex gap-8 pb-4 min-w-max">
                                     {roundLevels.map((level, idx) => {
                                       const round = roundLabelForIndex(idx);
@@ -320,6 +382,7 @@ export default function AdminFixtures() {
                                           return (
                                     <div
                                       key={match.id}
+                                      ref={el => { matchRefs.current[match.id] = el; }}
                                       className={cn(
                                         'border rounded-lg p-3 bg-card hover:shadow-md transition-shadow',
                                         match.status === 'Completed' && 'border-primary/30'
