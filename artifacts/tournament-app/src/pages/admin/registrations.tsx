@@ -2,8 +2,17 @@ import { useMemo, useState, useEffect } from 'react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, Search } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Users, Search, UserPlus, AlertCircle, CheckCircle } from 'lucide-react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -15,31 +24,46 @@ import {
   type ColumnDef,
 } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 import {
   fetchEvents,
   fetchRegistrations,
+  assignPartner,
   type AppEvent,
   type AppRegistration
 } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
 type RegistrationRow = {
-  providedEmployeeId: string;
   id: string;
+  providedEmployeeId: string;
   employeeName: string;
   department: string;
   location: string;
   eventName: string;
   eventId: string;
+  eventType: 'Singles' | 'Doubles';
+  partnerId?: string | null;
+  partnerName?: string | null;
   registrationDate: string;
 };
 
 export default function Registrations() {
+  const { toast } = useToast();
   const [globalFilter, setGlobalFilter] = useState('');
   const [eventFilter, setEventFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
   const [eventsList, setEventsList] = useState<AppEvent[]>([]);
   const [regs, setRegs] = useState<AppRegistration[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Partner Assignment Modal State
+  const [assigningRow, setAssigningRow] = useState<RegistrationRow | null>(null);
+  const [assignPartnerId, setAssignPartnerId] = useState('');
+  const [assignPartnerName, setAssignPartnerName] = useState('');
+  const [assignPartnerDept, setAssignPartnerDept] = useState('');
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -51,7 +75,6 @@ export default function Registrations() {
       setEventsList(eventsData);
       setRegs(regsData);
 
-      // check URL query for preselected event
       const query = new URLSearchParams(window.location.search);
       const evParam = query.get('event');
       if (evParam && eventsData.some(e => e.id === evParam)) {
@@ -69,6 +92,10 @@ export default function Registrations() {
   const data = useMemo<RegistrationRow[]>(() => {
     return regs.map(reg => {
       const event = eventsList.find(e => e.id === reg.eventId);
+      const partner = reg.partnerId
+        ? regs.find(r => r.eventId === reg.eventId && (r.employeeId === reg.partnerId || r.providedEmployeeId === reg.partnerId))
+        : null;
+
       return {
         id: reg.id,
         providedEmployeeId: reg.providedEmployeeId || reg.employeeId || '-',
@@ -77,6 +104,9 @@ export default function Registrations() {
         location: reg.location || 'Unknown',
         eventName: event?.name || reg.eventId || 'Unknown',
         eventId: reg.eventId,
+        eventType: event?.type || 'Singles',
+        partnerId: reg.partnerId || null,
+        partnerName: partner?.employeeName || null,
         registrationDate: new Date(reg.registrationDate).toLocaleDateString(),
       };
     });
@@ -93,6 +123,51 @@ export default function Registrations() {
     return filtered;
   }, [data, eventFilter, locationFilter]);
 
+  const handleOpenAssignModal = (row: RegistrationRow) => {
+    setAssigningRow(row);
+    setAssignPartnerId('');
+    setAssignPartnerName('');
+    setAssignPartnerDept('');
+    setAssignError(null);
+  };
+
+  const handleSavePartner = async () => {
+    if (!assigningRow) return;
+    if (!assignPartnerId.trim()) {
+      setAssignError('Partner Employee ID is required.');
+      return;
+    }
+    if (assignPartnerId.trim().toLowerCase() === assigningRow.providedEmployeeId.trim().toLowerCase()) {
+      setAssignError('A player cannot be their own Doubles partner.');
+      return;
+    }
+
+    setIsAssigning(true);
+    setAssignError(null);
+
+    const res = await assignPartner(
+      assigningRow.id,
+      assignPartnerId.trim(),
+      assignPartnerName.trim() || undefined,
+      assignPartnerDept.trim() || undefined
+    );
+
+    setIsAssigning(false);
+
+    if (!res.ok) {
+      setAssignError(res.error || 'Failed to assign partner');
+      return;
+    }
+
+    toast({
+      title: 'Partner Assigned! 🎉',
+      description: `Successfully paired ${assigningRow.employeeName} with ${assignPartnerName || assignPartnerId}.`
+    });
+
+    setAssigningRow(null);
+    await loadData();
+  };
+
   const columnHelper = createColumnHelper<RegistrationRow>();
 
   const columns = useMemo<ColumnDef<RegistrationRow, any>[]>(() => [
@@ -101,7 +176,7 @@ export default function Registrations() {
       cell: info => <span className="font-mono text-sm font-semibold">{info.getValue()}</span>,
     }),
     columnHelper.accessor('employeeName', {
-      header: 'Employee Name',
+      header: 'Player Name',
       cell: info => <span className="font-medium">{info.getValue()}</span>,
     }),
     columnHelper.accessor('department', {
@@ -118,10 +193,58 @@ export default function Registrations() {
     }),
     columnHelper.accessor('eventName', {
       header: 'Event',
-      cell: info => <span className="text-sm font-medium">{info.getValue()}</span>,
+      cell: info => {
+        const row = info.row.original;
+        return (
+          <div className="space-y-0.5">
+            <span className="text-sm font-medium block">{info.getValue()}</span>
+            <span className={cn(
+              "text-[10px] px-1.5 py-0.2 rounded font-semibold uppercase tracking-wider",
+              row.eventType === 'Doubles' ? "bg-purple-500/10 text-purple-600" : "bg-sky-500/10 text-sky-600"
+            )}>
+              {row.eventType}
+            </span>
+          </div>
+        );
+      },
+    }),
+    columnHelper.accessor('partnerId', {
+      header: 'Doubles Team / Partner',
+      cell: info => {
+        const row = info.row.original;
+        if (row.eventType !== 'Doubles') {
+          return <span className="text-xs text-muted-foreground">-</span>;
+        }
+
+        if (row.partnerId) {
+          return (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-medium border border-emerald-500/20">
+              <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
+              <span>Partner: {row.partnerName || row.partnerId} ({row.partnerId})</span>
+            </div>
+          );
+        }
+
+        return (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 text-xs font-medium border border-amber-500/20">
+              Partial (No Partner)
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs px-2.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 border-purple-500/30"
+              onClick={() => handleOpenAssignModal(row)}
+            >
+              <UserPlus className="h-3 w-3 mr-1" />
+              Assign
+            </Button>
+          </div>
+        );
+      },
     }),
     columnHelper.accessor('registrationDate', {
-      header: 'Registration Date',
+      header: 'Registered',
       cell: info => <span className="text-xs text-muted-foreground font-mono">{info.getValue()}</span>,
     }),
   ], [columnHelper]);
@@ -150,7 +273,7 @@ export default function Registrations() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Registrations Management</h1>
           <p className="text-muted-foreground">
-            View and search all participants registered in the tournament database
+            View, search, and manage participants, Doubles team pairings, and partial entries across all events.
           </p>
         </div>
 
@@ -177,7 +300,7 @@ export default function Registrations() {
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by participant name, ID, or department..."
+                  placeholder="Search by participant name, ID, department, or partner..."
                   value={globalFilter}
                   onChange={(e) => setGlobalFilter(e.target.value)}
                   className="pl-9"
@@ -192,7 +315,7 @@ export default function Registrations() {
                   <SelectItem value="all">All Events ({regs.length})</SelectItem>
                   {eventsList.map(event => (
                     <SelectItem key={event.id} value={event.id}>
-                      {event.name}
+                      {event.name} ({event.type})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -205,7 +328,6 @@ export default function Registrations() {
                   <SelectItem value="all">All Locations</SelectItem>
                   <SelectItem value="Irrum Manzil">Irrum Manzil</SelectItem>
                   <SelectItem value="Hitech City">Hitech City</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -232,7 +354,7 @@ export default function Registrations() {
                   <tbody>
                     {loading ? (
                       <tr>
-                        <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                        <td colSpan={7} className="p-8 text-center text-muted-foreground">
                           Loading registrations…
                         </td>
                       </tr>
@@ -252,7 +374,7 @@ export default function Registrations() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                        <td colSpan={7} className="p-8 text-center text-muted-foreground">
                           No registrations found matching the filters.
                         </td>
                       </tr>
@@ -298,6 +420,73 @@ export default function Registrations() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Assign Partner Dialog */}
+      <Dialog open={!!assigningRow} onOpenChange={(open) => !open && setAssigningRow(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Doubles Partner</DialogTitle>
+            <DialogDescription>
+              Pair a partner with <strong className="text-foreground">{assigningRow?.employeeName}</strong> ({assigningRow?.providedEmployeeId}) for {assigningRow?.eventName}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="assignPartnerId" className="text-sm font-semibold">Partner Employee ID *</Label>
+              <Input
+                id="assignPartnerId"
+                placeholder="e.g. EMP-1043"
+                value={assignPartnerId}
+                onChange={(e) => {
+                  setAssignPartnerId(e.target.value);
+                  setAssignError(null);
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="assignPartnerName" className="text-sm font-semibold">Partner Full Name</Label>
+              <Input
+                id="assignPartnerName"
+                placeholder="e.g. Jordan Smith"
+                value={assignPartnerName}
+                onChange={(e) => setAssignPartnerName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="assignPartnerDept" className="text-sm font-semibold">Partner Department</Label>
+              <Input
+                id="assignPartnerDept"
+                placeholder="e.g. Engineering, Sales"
+                value={assignPartnerDept}
+                onChange={(e) => setAssignPartnerDept(e.target.value)}
+              />
+            </div>
+
+            {assignError && (
+              <div className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{assignError}</span>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssigningRow(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSavePartner}
+              disabled={isAssigning || !assignPartnerId.trim()}
+              className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              {isAssigning ? 'Pairing...' : 'Assign & Complete Team'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 }

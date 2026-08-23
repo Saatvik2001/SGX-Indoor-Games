@@ -13,7 +13,6 @@ router.post("/", async (req, res) => {
     // Accept either { registrations: [...] } or a single registration object
     let registrations = (req.body && req.body.registrations) as any[] | undefined;
     if (!Array.isArray(registrations)) {
-      // If payload looks like a single registration, wrap it
       const possible = req.body as any;
       if (possible && (possible.employeeId || possible.employee_id) && (possible.eventId || possible.event_id)) {
         registrations = [possible];
@@ -24,9 +23,13 @@ router.post("/", async (req, res) => {
     }
 
     if (!pool || !db) {
-      const inserted = await fallbackStore.addRegistrations(registrations);
-      logger.info({ count: inserted.length }, 'Inserted registrations into fallback store');
-      return res.status(201).json({ ok: true, insertedCount: inserted.length, inserted });
+      try {
+        const inserted = await fallbackStore.addRegistrations(registrations);
+        logger.info({ count: inserted.length }, 'Inserted registrations into fallback store');
+        return res.status(201).json({ ok: true, insertedCount: inserted.length, inserted });
+      } catch (valErr: any) {
+        return res.status(400).json({ error: valErr?.message || 'Registration validation failed' });
+      }
     }
 
     const p = pool;
@@ -35,48 +38,114 @@ router.post("/", async (req, res) => {
 
       const insertedRows = [];
       for (const r of registrations) {
-        const empId = r.employeeId || r.employee_id || `EMP-${Date.now()}`;
-        const provEmpId = r.providedEmployeeId || r.provided_employee_id || empId;
-        const empName = r.employeeName || r.employee_name || 'Participant';
-        const dept = r.department || null;
-        const tournId = r.tournamentId || r.tournament_id || 'solugenix-indoor-2026';
-        const evId = r.eventId || r.event_id;
-        const partnerId = r.partnerId || r.partner_id || null;
+        const evId = String(r.eventId || r.event_id || '');
+        const evRes = await p.query('SELECT type, tournament_id FROM events WHERE id = $1 LIMIT 1', [evId]);
+        const ev = evRes.rows[0];
+        const isDoubles = r.eventType === 'Doubles' || ev?.type === 'Doubles';
+        const tournId = r.tournamentId || r.tournament_id || ev?.tournament_id || 'T001';
         const loc = r.location || 'Irrum Manzil';
         const rawDate = r.registrationDate || r.registration_date;
         const regDate = rawDate ? new Date(rawDate) : new Date();
 
-        const insertRes = await p.query(
-          `INSERT INTO registrations(employee_id, provided_employee_id, employee_name, department, tournament_id, event_id, partner_id, location, registration_date)
-           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-          [empId, provEmpId, empName, dept, tournId, evId, partnerId, loc, isNaN(regDate.getTime()) ? new Date() : regDate]
-        );
-        const row = insertRes.rows[0];
-        insertedRows.push(row);
-        try {
-          let isDoubles = false;
-          if (r.eventType === 'Doubles') isDoubles = true;
-          else {
-            const evRes = await p.query('SELECT type FROM events WHERE id = $1 LIMIT 1', [r.eventId]);
-            const ev = evRes.rows[0];
-            if (ev?.type === 'Doubles') isDoubles = true;
+        const p1 = String(r.employeeId || r.providedEmployeeId || r.employee_id || '').trim();
+        const p1Provided = String(r.providedEmployeeId || p1).trim();
+        const p1Name = String(r.employeeName || r.employee_name || p1).trim();
+        const p1Dept = r.department ? String(r.department).trim() : null;
+
+        if (!p1) {
+          throw new Error('Employee ID is required.');
+        }
+
+        if (!isDoubles) {
+          // SINGLES VALIDATION:
+          const existing = await p.query(
+            'SELECT id FROM registrations WHERE event_id = $1 AND (LOWER(employee_id) = LOWER($2) OR LOWER(provided_employee_id) = LOWER($2)) LIMIT 1',
+            [evId, p1]
+          );
+          if (existing.rows.length > 0) {
+            throw new Error('This player is already registered for this event.');
           }
-          if (isDoubles && !r.partnerId) {
-            const newReg = row;
-            const otherRes = await p.query(
-              'SELECT * FROM registrations WHERE event_id = $1 AND location = $2 AND partner_id IS NULL AND id <> $3 ORDER BY registration_date ASC LIMIT 1',
-              [r.eventId, r.location, newReg.id]
-            );
-            const other = otherRes.rows[0];
-            if (other) {
-              await p.query('UPDATE registrations SET partner_id = $1 WHERE id = $2', [other.employee_id, newReg.id]);
-              await p.query('UPDATE registrations SET partner_id = $1 WHERE id = $2', [newReg.employee_id, other.id]);
-              const idx = insertedRows.findIndex(x => x.id === newReg.id);
-              if (idx >= 0) insertedRows[idx].partner_id = other.employee_id;
+
+          const insertRes = await p.query(
+            `INSERT INTO registrations(employee_id, provided_employee_id, employee_name, department, tournament_id, event_id, partner_id, location, registration_date)
+             VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+            [p1, p1Provided, p1Name, p1Dept, tournId, evId, null, loc, isNaN(regDate.getTime()) ? new Date() : regDate]
+          );
+          insertedRows.push(insertRes.rows[0]);
+        } else {
+          // DOUBLES VALIDATION:
+          const p2Raw = r.partnerId || r.partner_id;
+          const p2 = p2Raw ? String(p2Raw).trim() : null;
+          const p2Name = r.partnerName || r.partner_name ? String(r.partnerName || r.partner_name).trim() : (p2 || '');
+          const p2Dept = r.partnerDepartment || r.partner_department ? String(r.partnerDepartment || r.partner_department).trim() : p1Dept;
+
+          if (p2) {
+            if (p1.toLowerCase() === p2.toLowerCase()) {
+              throw new Error('A player cannot be their own Doubles partner.');
             }
+
+            // Check if player 1 is already in a team for this event
+            const p1InEvent = await p.query(
+              'SELECT id FROM registrations WHERE event_id = $1 AND (LOWER(employee_id) = LOWER($2) OR LOWER(partner_id) = LOWER($2)) LIMIT 1',
+              [evId, p1]
+            );
+            if (p1InEvent.rows.length > 0) {
+              throw new Error('This player is already part of another Doubles team for this event.');
+            }
+
+            // Check if player 2 is already in a team for this event
+            const p2InEvent = await p.query(
+              'SELECT id FROM registrations WHERE event_id = $1 AND (LOWER(employee_id) = LOWER($2) OR LOWER(partner_id) = LOWER($2)) LIMIT 1',
+              [evId, p2]
+            );
+            if (p2InEvent.rows.length > 0) {
+              throw new Error('This player is already part of another Doubles team for this event.');
+            }
+
+            // Check normalized team in this event
+            const teamInEvent = await p.query(
+              `SELECT id FROM registrations WHERE event_id = $1 AND (
+                (LOWER(employee_id) = LOWER($2) AND LOWER(partner_id) = LOWER($3)) OR
+                (LOWER(employee_id) = LOWER($3) AND LOWER(partner_id) = LOWER($2))
+              ) LIMIT 1`,
+              [evId, p1, p2]
+            );
+            if (teamInEvent.rows.length > 0) {
+              throw new Error('This Doubles team is already registered.');
+            }
+
+            // Insert Player 1
+            const ins1 = await p.query(
+              `INSERT INTO registrations(employee_id, provided_employee_id, employee_name, department, tournament_id, event_id, partner_id, location, registration_date)
+               VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+              [p1, p1Provided, p1Name, p1Dept, tournId, evId, p2, loc, isNaN(regDate.getTime()) ? new Date() : regDate]
+            );
+            insertedRows.push(ins1.rows[0]);
+
+            // Insert Player 2
+            const ins2 = await p.query(
+              `INSERT INTO registrations(employee_id, provided_employee_id, employee_name, department, tournament_id, event_id, partner_id, location, registration_date)
+               VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+              [p2, p2, p2Name || p2, p2Dept, tournId, evId, p1, loc, isNaN(regDate.getTime()) ? new Date() : regDate]
+            );
+            insertedRows.push(ins2.rows[0]);
+          } else {
+            // Partial Doubles registration without partner
+            const p1InEvent = await p.query(
+              'SELECT id FROM registrations WHERE event_id = $1 AND (LOWER(employee_id) = LOWER($2) OR LOWER(partner_id) = LOWER($2)) LIMIT 1',
+              [evId, p1]
+            );
+            if (p1InEvent.rows.length > 0) {
+              throw new Error('This player is already registered for this event.');
+            }
+
+            const ins1 = await p.query(
+              `INSERT INTO registrations(employee_id, provided_employee_id, employee_name, department, tournament_id, event_id, partner_id, location, registration_date)
+               VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+              [p1, p1Provided, p1Name, p1Dept, tournId, evId, null, loc, isNaN(regDate.getTime()) ? new Date() : regDate]
+            );
+            insertedRows.push(ins1.rows[0]);
           }
-        } catch (pairErr) {
-          logger.error({ pairErr }, 'Error attempting to auto-pair registration');
         }
       }
 
@@ -91,7 +160,63 @@ router.post("/", async (req, res) => {
     return res.status(201).json({ ok: true, insertedCount: inserted.length, inserted });
   } catch (err: any) {
     logger.error({ err }, "Error handling registration");
-    return res.status(500).json({ error: err?.message || "internal" });
+    return res.status(400).json({ error: err?.message || "Registration failed" });
+  }
+});
+
+// PUT /api/registrations/:id/partner
+router.put("/:id/partner", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { partnerId, partnerName, partnerDepartment } = req.body;
+    if (!partnerId) {
+      return res.status(400).json({ error: 'partnerId is required' });
+    }
+
+    if (!pool || !db) {
+      const updated = await fallbackStore.assignPartner(Number(id), partnerId, partnerName, partnerDepartment);
+      return res.json({ ok: true, registration: updated });
+    }
+
+    const p = pool;
+    const result = await withDatabaseFallback(async () => {
+      const regRes = await p.query('SELECT * FROM registrations WHERE id = $1 LIMIT 1', [id]);
+      const reg = regRes.rows[0];
+      if (!reg) throw new Error('Registration not found');
+
+      const p1 = reg.employee_id;
+      const p2 = String(partnerId).trim();
+      if (p1.toLowerCase() === p2.toLowerCase()) {
+        throw new Error('A player cannot be their own Doubles partner.');
+      }
+
+      const p2InEvent = await p.query(
+        'SELECT * FROM registrations WHERE event_id = $1 AND id <> $2 AND (LOWER(employee_id) = LOWER($3) OR LOWER(partner_id) = LOWER($3)) LIMIT 1',
+        [reg.event_id, reg.id, p2]
+      );
+      if (p2InEvent.rows.length > 0 && p2InEvent.rows[0].partner_id) {
+        throw new Error('This player is already part of another Doubles team for this event.');
+      }
+
+      await p.query('UPDATE registrations SET partner_id = $1 WHERE id = $2', [p2, reg.id]);
+      if (p2InEvent.rows.length > 0) {
+        await p.query('UPDATE registrations SET partner_id = $1 WHERE id = $2', [p1, p2InEvent.rows[0].id]);
+      } else {
+        await p.query(
+          `INSERT INTO registrations(employee_id, provided_employee_id, employee_name, department, tournament_id, event_id, partner_id, location, registration_date)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [p2, p2, partnerName || p2, partnerDepartment || reg.department, reg.tournament_id, reg.event_id, p1, reg.location, new Date()]
+        );
+      }
+      return { ...reg, partner_id: p2 };
+    }, async () => {
+      return await fallbackStore.assignPartner(Number(id), partnerId, partnerName, partnerDepartment);
+    });
+
+    return res.json({ ok: true, registration: result });
+  } catch (err: any) {
+    logger.error({ err }, 'Error assigning partner');
+    return res.status(400).json({ error: err?.message || 'Failed to assign partner' });
   }
 });
 
@@ -103,7 +228,6 @@ router.get("/", async (req, res) => {
       const rows = await fallbackStore.getRegistrations(eventId, location);
       return res.json(rows);
     }
-    // Simple, safe implementation: return all registrations or filter by query params safely
     const { eventId, location } = req.query as Record<string, string>;
     let q = 'SELECT * FROM registrations';
     const params: any[] = [];

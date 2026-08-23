@@ -183,45 +183,31 @@ export default function AdminFixtures() {
 
     setRegenerating(true);
     try {
-      let regs = await fetchRegistrations(selectedEvent);
+      const regs = await fetchRegistrations(selectedEvent);
+      const currentEv = eventsList.find(e => e.id === selectedEvent);
+      const isDoubles = currentEv?.type === 'Doubles';
+
       if (regs.length === 0) {
-        // Auto-seed sample tournament roster so fixtures can be generated immediately
-        const sampleEmployees = [
-          { empId: 'SGX-101', name: 'Satvik Arvapally', dept: 'Engineering', loc: 'Irrum Manzil' },
-          { empId: 'SGX-102', name: 'Rahul Sharma', dept: 'Operations', loc: 'Irrum Manzil' },
-          { empId: 'SGX-103', name: 'Priya Patel', dept: 'Product', loc: 'Irrum Manzil' },
-          { empId: 'SGX-104', name: 'Amit Verma', dept: 'Finance', loc: 'Irrum Manzil' },
-          { empId: 'SGX-105', name: 'Sneha Reddy', dept: 'HR', loc: 'Hitech City' },
-          { empId: 'SGX-106', name: 'Vikram Joshi', dept: 'Engineering', loc: 'Hitech City' },
-          { empId: 'SGX-107', name: 'Ananya Rao', dept: 'Design', loc: 'Hitech City' },
-          { empId: 'SGX-108', name: 'Kiran Kumar', dept: 'QA', loc: 'Hitech City' }
-        ];
-
-        const seedPayloads = sampleEmployees.map(emp => ({
-          employeeId: emp.empId,
-          providedEmployeeId: emp.empId,
-          employeeName: emp.name,
-          department: emp.dept,
-          tournamentId: 'solugenix-indoor-2026',
-          eventId: selectedEvent,
-          location: emp.loc,
-          registrationDate: new Date().toISOString()
-        }));
-
-        await fetch(apiUrl('/api/registrations'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ registrations: seedPayloads })
+        toast({
+          title: 'No Registrations Found',
+          description: 'Please register participants for this event before generating fixtures.',
+          variant: 'destructive'
         });
-
-        regs = await fetchRegistrations(selectedEvent);
+        setRegenerating(false);
+        return;
       }
 
-      const perLocationPlayerIds: Record<string, string[]> = {};
-      for (const r of regs) {
-        const loc = r.location || 'All';
-        perLocationPlayerIds[loc] = perLocationPlayerIds[loc] || [];
-        perLocationPlayerIds[loc].push(r.employeeId);
+      if (isDoubles) {
+        const completePairs = regs.filter(r => r.partnerId);
+        if (completePairs.length === 0) {
+          toast({
+            title: 'No Complete Doubles Teams',
+            description: 'There are no completed Doubles teams registered for this event. Please assign partners first.',
+            variant: 'destructive'
+          });
+          setRegenerating(false);
+          return;
+        }
       }
 
       const res = await fetch(apiUrl('/api/fixtures/generate'), {
@@ -229,13 +215,13 @@ export default function AdminFixtures() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           eventId: selectedEvent,
-          format: selectedFormat,
-          perLocationPlayerIds
+          format: selectedFormat
         })
       });
 
       if (!res.ok) {
-        toast({ title: 'Error', description: 'Failed to generate fixtures' });
+        const body = await res.json().catch(() => ({}));
+        toast({ title: 'Error', description: body?.error || 'Failed to generate fixtures', variant: 'destructive' });
         return;
       }
 
@@ -244,10 +230,10 @@ export default function AdminFixtures() {
       setShowGenerateModal(false);
       toast({
         title: 'Fixtures Generated! 🎯',
-        description: `Generated ${selectedFormat} fixtures for ${regs.length} participants (${data.matches?.length || 0} matches).`
+        description: `Generated ${selectedFormat} fixtures (${data.matches?.length || 0} matches).`
       });
     } catch {
-      toast({ title: 'Error', description: 'Network error generating fixtures' });
+      toast({ title: 'Error', description: 'Network error generating fixtures', variant: 'destructive' });
     } finally {
       setRegenerating(false);
     }

@@ -158,6 +158,11 @@ class FileFallbackStore {
     await fs.writeFile(this.filePath, JSON.stringify(this.state, null, 2));
   }
 
+  async reset() {
+    this.state = { registrations: [], matches: [], events: [], tournaments: [] };
+    await this.save();
+  }
+
   async getRegistrations(eventId?: string, location?: string) {
     await this.ensureLoaded();
     return this.state.registrations.filter((row) => {
@@ -170,43 +175,229 @@ class FileFallbackStore {
   async addRegistrations(payloads: Array<Record<string, unknown>>) {
     await this.ensureLoaded();
     const inserted: RegistrationRecord[] = [];
-    const nextId = this.state.registrations.reduce((max, row) => Math.max(max, row.id), 0) + 1;
+    let nextId = this.state.registrations.reduce((max, row) => Math.max(max, row.id), 0) + 1;
 
     for (const payload of payloads) {
-      const record: RegistrationRecord = {
-        id: nextId + inserted.length,
-        employee_id: String(payload.employeeId ?? ''),
-        provided_employee_id: String(payload.providedEmployeeId ?? payload.employeeId ?? ''),
-        employee_name: String(payload.employeeName ?? ''),
-        department: payload.department ? String(payload.department) : null,
-        tournament_id: String(payload.tournamentId ?? 'T001'),
-        event_id: String(payload.eventId ?? ''),
-        partner_id: payload.partnerId ? String(payload.partnerId) : null,
-        location: String(payload.location ?? ''),
-        registration_date: String(payload.registrationDate ?? new Date().toISOString()),
-      };
+      const eventId = String(payload.eventId || payload.event_id || '');
+      const event = this.state.events.find((e) => e.id === eventId);
+      const isDoubles = payload.eventType === 'Doubles' || event?.type === 'Doubles';
+      const tournamentId = String(payload.tournamentId || payload.tournament_id || event?.tournament_id || 'T001');
+      const location = String(payload.location || 'Irrum Manzil');
+      const regDate = String(payload.registrationDate || payload.registration_date || new Date().toISOString());
 
-      this.state.registrations.push(record);
-      inserted.push(record);
+      const p1 = String(payload.employeeId || payload.providedEmployeeId || payload.employee_id || '').trim();
+      const p1Provided = String(payload.providedEmployeeId || payload.employeeId || payload.employee_id || '').trim();
+      const p1Name = String(payload.employeeName || payload.employee_name || p1).trim();
+      const p1Dept = payload.department ? String(payload.department).trim() : null;
 
-      const isDoubles = payload.eventType === 'Doubles';
-      if (isDoubles && !record.partner_id) {
-        const candidate = this.state.registrations.find((existing) => {
-          return existing.id !== record.id
-            && existing.event_id === record.event_id
-            && existing.location === record.location
-            && existing.partner_id === null
-            && existing.employee_id !== record.employee_id;
-        });
-        if (candidate) {
-          record.partner_id = candidate.employee_id;
-          candidate.partner_id = record.employee_id;
+      if (!p1) {
+        throw new Error('Employee ID is required.');
+      }
+
+      if (!isDoubles) {
+        // SINGLES VALIDATION:
+        const existingSingles = this.state.registrations.find(
+          (r) => r.event_id === eventId && (
+            r.employee_id.toLowerCase() === p1.toLowerCase() ||
+            r.provided_employee_id.toLowerCase() === p1.toLowerCase()
+          )
+        );
+        if (existingSingles) {
+          throw new Error('This player is already registered for this event.');
+        }
+
+        const record: RegistrationRecord = {
+          id: nextId++,
+          employee_id: p1,
+          provided_employee_id: p1Provided || p1,
+          employee_name: p1Name,
+          department: p1Dept,
+          tournament_id: tournamentId,
+          event_id: eventId,
+          partner_id: null,
+          location,
+          registration_date: regDate,
+        };
+        this.state.registrations.push(record);
+        inserted.push(record);
+      } else {
+        // DOUBLES VALIDATION:
+        const p2Raw = payload.partnerId || payload.partner_id;
+        const p2 = p2Raw ? String(p2Raw).trim() : null;
+        const p2Name = payload.partnerName || payload.partner_name
+          ? String(payload.partnerName || payload.partner_name).trim()
+          : (p2 || '');
+        const p2Dept = payload.partnerDepartment || payload.partner_department
+          ? String(payload.partnerDepartment || payload.partner_department).trim()
+          : p1Dept;
+
+        if (p2) {
+          // Rule: A player cannot be their own partner
+          if (p1.toLowerCase() === p2.toLowerCase()) {
+            throw new Error('A player cannot be their own Doubles partner.');
+          }
+
+          // Rule: Check if Player 1 is already in a team for this event
+          const p1InEvent = this.state.registrations.find(
+            (r) => r.event_id === eventId && (
+              r.employee_id.toLowerCase() === p1.toLowerCase() ||
+              r.provided_employee_id.toLowerCase() === p1.toLowerCase() ||
+              (r.partner_id && r.partner_id.toLowerCase() === p1.toLowerCase())
+            )
+          );
+          if (p1InEvent) {
+            throw new Error('This player is already part of another Doubles team for this event.');
+          }
+
+          // Rule: Check if Player 2 is already in a team for this event
+          const p2InEvent = this.state.registrations.find(
+            (r) => r.event_id === eventId && (
+              r.employee_id.toLowerCase() === p2.toLowerCase() ||
+              r.provided_employee_id.toLowerCase() === p2.toLowerCase() ||
+              (r.partner_id && r.partner_id.toLowerCase() === p2.toLowerCase())
+            )
+          );
+          if (p2InEvent) {
+            throw new Error('This player is already part of another Doubles team for this event.');
+          }
+
+          // Rule: Normalized duplicate team check in this event (A+B == B+A)
+          const teamKey = [p1.toLowerCase(), p2.toLowerCase()].sort().join('___');
+          const teamInEvent = this.state.registrations.some(
+            (r) => r.event_id === eventId && r.partner_id && [r.employee_id.toLowerCase(), r.partner_id.toLowerCase()].sort().join('___') === teamKey
+          );
+          if (teamInEvent) {
+            throw new Error('This Doubles team is already registered.');
+          }
+
+          // Rule: Cross-event duplicate team check if disallowed
+          if (payload.disallowCrossEventDuplicateTeams) {
+            const teamInOtherEvent = this.state.registrations.some(
+              (r) => r.event_id !== eventId && r.partner_id && [r.employee_id.toLowerCase(), r.partner_id.toLowerCase()].sort().join('___') === teamKey
+            );
+            if (teamInOtherEvent) {
+              throw new Error('This Doubles team has already participated in another event and cannot be registered again.');
+            }
+          }
+
+          // Insert Player 1
+          const rec1: RegistrationRecord = {
+            id: nextId++,
+            employee_id: p1,
+            provided_employee_id: p1Provided || p1,
+            employee_name: p1Name,
+            department: p1Dept,
+            tournament_id: tournamentId,
+            event_id: eventId,
+            partner_id: p2,
+            location,
+            registration_date: regDate,
+          };
+          this.state.registrations.push(rec1);
+          inserted.push(rec1);
+
+          // Insert Player 2
+          const rec2: RegistrationRecord = {
+            id: nextId++,
+            employee_id: p2,
+            provided_employee_id: p2,
+            employee_name: p2Name || p2,
+            department: p2Dept,
+            tournament_id: tournamentId,
+            event_id: eventId,
+            partner_id: p1,
+            location,
+            registration_date: regDate,
+          };
+          this.state.registrations.push(rec2);
+          inserted.push(rec2);
+        } else {
+          // Partial Doubles registration without partner
+          const p1InEvent = this.state.registrations.find(
+            (r) => r.event_id === eventId && (
+              r.employee_id.toLowerCase() === p1.toLowerCase() ||
+              r.provided_employee_id.toLowerCase() === p1.toLowerCase() ||
+              (r.partner_id && r.partner_id.toLowerCase() === p1.toLowerCase())
+            )
+          );
+          if (p1InEvent) {
+            throw new Error('This player is already registered for this event.');
+          }
+
+          const rec1: RegistrationRecord = {
+            id: nextId++,
+            employee_id: p1,
+            provided_employee_id: p1Provided || p1,
+            employee_name: p1Name,
+            department: p1Dept,
+            tournament_id: tournamentId,
+            event_id: eventId,
+            partner_id: null,
+            location,
+            registration_date: regDate,
+          };
+          this.state.registrations.push(rec1);
+          inserted.push(rec1);
         }
       }
     }
 
     await this.save();
     return inserted;
+  }
+
+  async assignPartner(
+    registrationId: number,
+    partnerId: string,
+    partnerName?: string,
+    partnerDept?: string
+  ) {
+    await this.ensureLoaded();
+    const reg1 = this.state.registrations.find((r) => r.id === registrationId);
+    if (!reg1) throw new Error('Registration not found.');
+
+    const p1 = reg1.employee_id.trim();
+    const p2 = partnerId.trim();
+    if (!p2) throw new Error('Partner ID is required.');
+    if (p1.toLowerCase() === p2.toLowerCase()) {
+      throw new Error('A player cannot be their own Doubles partner.');
+    }
+
+    // Check if p2 is already in a completed team in this event
+    const p2InEvent = this.state.registrations.find(
+      (r) => r.id !== reg1.id && r.event_id === reg1.event_id && (
+        r.employee_id.toLowerCase() === p2.toLowerCase() ||
+        (r.partner_id && r.partner_id.toLowerCase() === p2.toLowerCase())
+      )
+    );
+
+    if (p2InEvent && p2InEvent.partner_id) {
+      throw new Error('This player is already part of another Doubles team for this event.');
+    }
+
+    reg1.partner_id = p2;
+
+    if (p2InEvent && !p2InEvent.partner_id) {
+      p2InEvent.partner_id = p1;
+    } else {
+      const nextId = this.state.registrations.reduce((max, row) => Math.max(max, row.id), 0) + 1;
+      const rec2: RegistrationRecord = {
+        id: nextId,
+        employee_id: p2,
+        provided_employee_id: p2,
+        employee_name: partnerName?.trim() || p2,
+        department: partnerDept?.trim() || reg1.department,
+        tournament_id: reg1.tournament_id,
+        event_id: reg1.event_id,
+        partner_id: p1,
+        location: reg1.location,
+        registration_date: new Date().toISOString(),
+      };
+      this.state.registrations.push(rec2);
+    }
+
+    await this.save();
+    return reg1;
   }
 
   async getEvents() {
@@ -321,17 +512,67 @@ class FileFallbackStore {
 
   async generateFixtures(
     eventId: string,
-    perLocationPlayerIds: Record<string, string[]>,
+    perLocationPlayerIds?: Record<string, string[]>,
     format: 'Single Elimination' | 'Round Robin' | 'Double Elimination' = 'Single Elimination'
   ) {
     await this.ensureLoaded();
     this.state.matches = this.state.matches.filter((row) => row.event_id !== eventId);
 
+    const event = this.state.events.find((e) => e.id === eventId);
+    const isDoubles = event?.type === 'Doubles';
+
     const generated: MatchRecord[] = [];
     let nextId = this.state.matches.reduce((max, row) => Math.max(max, row.id), 0) + 1;
 
-    for (const [location, players] of Object.entries(perLocationPlayerIds || {})) {
-      const locationMatches = buildBracketDraftMatches(eventId, location, players, format);
+    let locationMap = perLocationPlayerIds;
+    if (!locationMap || Object.keys(locationMap).length === 0) {
+      locationMap = {};
+      const regRows = this.state.registrations.filter((r) => r.event_id === eventId);
+      for (const row of regRows) {
+        const loc = row.location || 'All';
+        locationMap[loc] = locationMap[loc] || [];
+        locationMap[loc].push(row.employee_id);
+      }
+    }
+
+    for (const [location, players] of Object.entries(locationMap)) {
+      let effectiveParticipants: string[] = [];
+
+      if (isDoubles) {
+        // Find complete teams for this location
+        const eventRegs = this.state.registrations.filter(
+          (r) => r.event_id === eventId && (location === 'All' || r.location === location)
+        );
+
+        const teamSet = new Set<string>();
+        for (const reg of eventRegs) {
+          if (reg.partner_id) {
+            const p1 = reg.employee_id;
+            const p2 = reg.partner_id;
+            const sorted = [p1, p2].sort();
+            teamSet.add(`TEAM:${sorted[0]}:${sorted[1]}`);
+          }
+        }
+
+        if (teamSet.size === 0 && players && players.length > 0) {
+          const manualTeams = new Set<string>();
+          for (const p of players) {
+            if (p.startsWith('TEAM:') || p.includes('&') || p.includes('+')) {
+              manualTeams.add(p);
+            }
+          }
+          effectiveParticipants = manualTeams.size > 0 ? Array.from(manualTeams) : normalizeParticipantIds(players);
+        } else {
+          effectiveParticipants = Array.from(teamSet);
+        }
+      } else {
+        effectiveParticipants = normalizeParticipantIds(players);
+      }
+
+      if (effectiveParticipants.length === 0) continue;
+
+      const shuffled = shufflePlayers(effectiveParticipants);
+      const locationMatches = buildBracketDraftMatches(eventId, location, shuffled, format);
       for (const match of locationMatches) {
         generated.push({ ...match, id: nextId++ });
       }

@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { isDatabaseUnavailableError, withDatabaseFallback } from '../src/lib/db-fallback.ts';
 import { fallbackStore } from '../src/lib/fallback-store.ts';
 
+test.beforeEach(async () => {
+  await fallbackStore.reset();
+});
+
 test('detects common database connection errors', () => {
   assert.equal(isDatabaseUnavailableError(new Error('connect ECONNREFUSED 127.0.0.1:5432')), true);
   assert.equal(isDatabaseUnavailableError(new Error('getaddrinfo ENOTFOUND neon.tech')), true);
@@ -178,4 +182,134 @@ test('deleteTournament removes related fixtures and bracket data from the fallba
   assert.equal((await fallbackStore.getEvents()).some((row) => row.id === eventId), false);
   assert.equal((await fallbackStore.getRegistrations(eventId)).length, 0);
   assert.equal((await fallbackStore.getMatches(eventId)).length, 0);
+});
+
+test('Singles registration prevents same player from registering more than once for same event', async () => {
+  const eventId = 'singles-dup-test';
+  await fallbackStore.addEvent({ id: eventId, tournamentId: 't1', name: 'Singles Event', type: 'Singles', game: 'Tennis', meta: {} });
+  await fallbackStore.addRegistrations([{ employeeId: 'SMP1', providedEmployeeId: 'SMP1', employeeName: 'Player 1', eventId, eventType: 'Singles' }]);
+
+  await assert.rejects(
+    async () => {
+      await fallbackStore.addRegistrations([{ employeeId: 'SMP1', providedEmployeeId: 'SMP1', employeeName: 'Player 1', eventId, eventType: 'Singles' }]);
+    },
+    { message: 'This player is already registered for this event.' }
+  );
+});
+
+test('Doubles registration rejects self as partner', async () => {
+  const eventId = 'doubles-self-test';
+  await fallbackStore.addEvent({ id: eventId, tournamentId: 't1', name: 'Doubles Event', type: 'Doubles', game: 'Badminton', meta: {} });
+
+  await assert.rejects(
+    async () => {
+      await fallbackStore.addRegistrations([{
+        employeeId: 'EMP-1',
+        partnerId: 'EMP-1',
+        employeeName: 'Self Partner',
+        eventId,
+        eventType: 'Doubles'
+      }]);
+    },
+    { message: 'A player cannot be their own Doubles partner.' }
+  );
+});
+
+test('Doubles registration prevents duplicate teams regardless of player order (A+B vs B+A)', async () => {
+  const eventId = 'doubles-dup-team-test';
+  await fallbackStore.addEvent({ id: eventId, tournamentId: 't1', name: 'Doubles Event 2', type: 'Doubles', game: 'Badminton', meta: {} });
+  await fallbackStore.addRegistrations([{
+    employeeId: 'TEAM-A',
+    partnerId: 'TEAM-B',
+    employeeName: 'Player A',
+    partnerName: 'Player B',
+    eventId,
+    eventType: 'Doubles'
+  }]);
+
+  await assert.rejects(
+    async () => {
+      await fallbackStore.addRegistrations([{
+        employeeId: 'TEAM-B',
+        partnerId: 'TEAM-A',
+        employeeName: 'Player B',
+        partnerName: 'Player A',
+        eventId,
+        eventType: 'Doubles'
+      }]);
+    },
+    { message: 'This player is already part of another Doubles team for this event.' }
+  );
+});
+
+test('Doubles registration prevents conflicting player reuse in another team for same event', async () => {
+  const eventId = 'doubles-conflict-test';
+  await fallbackStore.addEvent({ id: eventId, tournamentId: 't1', name: 'Doubles Event 3', type: 'Doubles', game: 'Badminton', meta: {} });
+  await fallbackStore.addRegistrations([{
+    employeeId: 'CONF-A',
+    partnerId: 'CONF-B',
+    employeeName: 'Player A',
+    partnerName: 'Player B',
+    eventId,
+    eventType: 'Doubles'
+  }]);
+
+  await assert.rejects(
+    async () => {
+      await fallbackStore.addRegistrations([{
+        employeeId: 'CONF-A',
+        partnerId: 'CONF-C',
+        employeeName: 'Player A',
+        partnerName: 'Player C',
+        eventId,
+        eventType: 'Doubles'
+      }]);
+    },
+    { message: 'This player is already part of another Doubles team for this event.' }
+  );
+});
+
+test('Doubles partial registration saves single player without partner and excludes from fixtures until completed', async () => {
+  const eventId = 'doubles-partial-test';
+  await fallbackStore.addEvent({ id: eventId, tournamentId: 't1', name: 'Doubles Partial Event', type: 'Doubles', game: 'Badminton', meta: {} });
+  
+  // Register complete team A + B
+  await fallbackStore.addRegistrations([{
+    employeeId: 'PA',
+    partnerId: 'PB',
+    employeeName: 'Player A',
+    partnerName: 'Player B',
+    location: 'Irrum Manzil',
+    eventId,
+    eventType: 'Doubles'
+  }]);
+
+  // Register partial entry C (no partner)
+  const partial = await fallbackStore.addRegistrations([{
+    employeeId: 'PC',
+    employeeName: 'Player C',
+    location: 'Irrum Manzil',
+    eventId,
+    eventType: 'Doubles'
+  }]);
+
+  assert.equal(partial[0].partner_id, null);
+
+  // Generate fixtures: only complete team PA:PB should participate
+  const matches = await fallbackStore.generateFixtures(eventId);
+  assert.equal(matches.length, 1);
+  assert.equal(matches[0].player1_id, 'TEAM:PA:PB');
+
+  // Now assign partner PD to PC
+  await fallbackStore.assignPartner(partial[0].id, 'PD', 'Player D');
+  const regs = await fallbackStore.getRegistrations(eventId);
+  const updatedC = regs.find(r => r.employee_id === 'PC');
+  assert.equal(updatedC?.partner_id, 'PD');
+
+  // Now regenerate fixtures: both teams should participate
+  const matchesAfterPair = await fallbackStore.generateFixtures(eventId);
+  assert.equal(matchesAfterPair.length, 1);
+  const players = [matchesAfterPair[0].player1_id, matchesAfterPair[0].player2_id];
+  assert.ok(players.includes('TEAM:PA:PB'));
+  assert.ok(players.includes('TEAM:PC:PD'));
 });

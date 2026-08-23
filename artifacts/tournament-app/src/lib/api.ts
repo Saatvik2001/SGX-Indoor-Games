@@ -213,17 +213,58 @@ export function getParticipantDisplay(
     return { name: 'TBD', id: '', display: 'TBD', hasPlayer: false };
   }
 
+  // Handle Team ID format: e.g. "TEAM:P1:P2" or "P1 & P2" or "P1+P2"
+  if (playerId.startsWith('TEAM:') || playerId.includes(' & ') || playerId.includes('+')) {
+    const rawParts = playerId.startsWith('TEAM:')
+      ? playerId.replace(/^TEAM:/, '').split(':')
+      : playerId.split(/[\+&]/);
+    const parts = rawParts.map((s) => s.trim()).filter(Boolean);
+
+    if (parts.length === 2) {
+      const reg1 = registrations.find(
+        (r) => r.employeeId === parts[0] || r.providedEmployeeId === parts[0] || r.id === parts[0]
+      );
+      const reg2 = registrations.find(
+        (r) => r.employeeId === parts[1] || r.providedEmployeeId === parts[1] || r.id === parts[1]
+      );
+      const name1 = reg1?.employeeName || parts[0];
+      const name2 = reg2?.employeeName || parts[1];
+      const id1 = reg1?.providedEmployeeId || reg1?.employeeId || parts[0];
+      const id2 = reg2?.providedEmployeeId || reg2?.employeeId || parts[1];
+      return {
+        name: `${name1} & ${name2}`,
+        id: `${id1} & ${id2}`,
+        display: `${name1} & ${name2} (${id1} & ${id2})`,
+        hasPlayer: true,
+      };
+    }
+  }
+
   const reg = registrations.find(
-    r => r.employeeId === playerId || r.providedEmployeeId === playerId || r.id === playerId
+    (r) => r.employeeId === playerId || r.providedEmployeeId === playerId || r.id === playerId
   );
 
   if (reg) {
     const empId = reg.providedEmployeeId || reg.employeeId;
+    if (reg.partnerId) {
+      const partner = registrations.find(
+        (r) => r.employeeId === reg.partnerId || r.providedEmployeeId === reg.partnerId || r.id === reg.partnerId
+      );
+      if (partner) {
+        const partnerEmpId = partner.providedEmployeeId || partner.employeeId;
+        return {
+          name: `${reg.employeeName} & ${partner.employeeName}`,
+          id: `${empId} & ${partnerEmpId}`,
+          display: `${reg.employeeName} & ${partner.employeeName} (${empId} & ${partnerEmpId})`,
+          hasPlayer: true,
+        };
+      }
+    }
     return {
       name: reg.employeeName,
       id: empId,
       display: `${reg.employeeName} (${empId})`,
-      hasPlayer: true
+      hasPlayer: true,
     };
   }
 
@@ -231,8 +272,30 @@ export function getParticipantDisplay(
     name: playerId,
     id: playerId,
     display: playerId,
-    hasPlayer: true
+    hasPlayer: true,
   };
+}
+
+export async function assignPartner(
+  registrationId: string | number,
+  partnerId: string,
+  partnerName?: string,
+  partnerDepartment?: string
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(apiUrl(`/api/registrations/${registrationId}/partner`), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ partnerId, partnerName, partnerDepartment }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { ok: false, error: data?.error || 'Failed to assign partner' };
+    }
+    return { ok: true };
+  } catch (err: any) {
+    return { ok: false, error: err?.message || 'Network error' };
+  }
 }
 
 export async function saveMatchWinner(numericId: number, winnerId: string): Promise<boolean> {

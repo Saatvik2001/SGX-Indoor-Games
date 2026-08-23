@@ -70,24 +70,60 @@ router.post("/generate", async (req, res) => {
     if (!locationMap || Object.keys(locationMap).length === 0) {
       locationMap = {};
       if (pool) {
-        const regRes = await pool.query('SELECT employee_id, location FROM registrations WHERE event_id = $1 ORDER BY id ASC', [eventId]);
-        for (const row of regRes.rows) {
-          const loc = row.location || 'All';
-          locationMap[loc] = locationMap[loc] || [];
-          locationMap[loc].push(row.employee_id);
-        }
-        if (!reqFormat) {
-          const evRes = await pool.query('SELECT meta FROM events WHERE id = $1', [eventId]);
-          const evMeta = evRes.rows[0]?.meta;
-          const parsedMeta = typeof evMeta === 'string' ? JSON.parse(evMeta || '{}') : (evMeta || {});
+        const evRes = await pool.query('SELECT type, meta FROM events WHERE id = $1', [eventId]);
+        const ev = evRes.rows[0];
+        const isDoubles = ev?.type === 'Doubles';
+        if (!reqFormat && ev?.meta) {
+          const parsedMeta = typeof ev.meta === 'string' ? JSON.parse(ev.meta || '{}') : (ev.meta || {});
           if (parsedMeta.format) format = parsedMeta.format;
         }
+
+        const regRes = await pool.query('SELECT employee_id, partner_id, location FROM registrations WHERE event_id = $1 ORDER BY id ASC', [eventId]);
+        if (isDoubles) {
+          const locTeams: Record<string, Set<string>> = {};
+          for (const row of regRes.rows) {
+            const loc = row.location || 'All';
+            if (row.partner_id) {
+              locTeams[loc] = locTeams[loc] || new Set();
+              const sorted = [row.employee_id, row.partner_id].sort();
+              locTeams[loc].add(`TEAM:${sorted[0]}:${sorted[1]}`);
+            }
+          }
+          for (const [loc, teams] of Object.entries(locTeams)) {
+            locationMap[loc] = Array.from(teams);
+          }
+        } else {
+          for (const row of regRes.rows) {
+            const loc = row.location || 'All';
+            locationMap[loc] = locationMap[loc] || [];
+            locationMap[loc].push(row.employee_id);
+          }
+        }
       } else {
+        const evs = await fallbackStore.getEvents();
+        const ev = evs.find(e => e.id === eventId);
+        const isDoubles = ev?.type === 'Doubles';
         const regRows = await fallbackStore.getRegistrations(eventId);
-        for (const row of regRows) {
-          const loc = row.location || 'All';
-          locationMap[loc] = locationMap[loc] || [];
-          locationMap[loc].push(row.employee_id);
+
+        if (isDoubles) {
+          const locTeams: Record<string, Set<string>> = {};
+          for (const row of regRows) {
+            const loc = row.location || 'All';
+            if (row.partner_id) {
+              locTeams[loc] = locTeams[loc] || new Set();
+              const sorted = [row.employee_id, row.partner_id].sort();
+              locTeams[loc].add(`TEAM:${sorted[0]}:${sorted[1]}`);
+            }
+          }
+          for (const [loc, teams] of Object.entries(locTeams)) {
+            locationMap[loc] = Array.from(teams);
+          }
+        } else {
+          for (const row of regRows) {
+            const loc = row.location || 'All';
+            locationMap[loc] = locationMap[loc] || [];
+            locationMap[loc].push(row.employee_id);
+          }
         }
       }
     }

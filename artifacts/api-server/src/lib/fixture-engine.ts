@@ -382,15 +382,19 @@ export function buildTournamentMatches(
   eventId: string,
   location: string,
   participantIds: string[],
-  format: 'Single Elimination' | 'Round Robin' | 'Double Round Robin' | 'Double Elimination' = 'Single Elimination'
+  format: 'Single Elimination' | 'Round Robin' | 'Double Round Robin' | 'Double Elimination' = 'Single Elimination',
+  shouldShuffle: boolean = true
 ): GeneratedDraftMatch[] {
+  const normalized = normalizeParticipantIds(participantIds);
+  const shuffled = shouldShuffle ? shufflePlayers(normalized) : normalized;
+
   if (format === 'Double Round Robin') {
-    return buildDoubleRoundRobinMatches(eventId, location, participantIds);
+    return buildDoubleRoundRobinMatches(eventId, location, shuffled);
   }
   if (format === 'Round Robin') {
-    return buildRoundRobinMatches(eventId, location, participantIds);
+    return buildRoundRobinMatches(eventId, location, shuffled);
   }
-  return buildSingleEliminationMatches(eventId, location, participantIds);
+  return buildSingleEliminationMatches(eventId, location, shuffled);
 }
 
 /**
