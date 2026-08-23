@@ -144,7 +144,7 @@ export default function Schedule() {
                           <div className="flex items-center gap-3">
                             <StatusBadge status={match.status} />
                             <span className="font-bold text-sm text-foreground">
-                              Match #{match.numericId} • {match.round}
+                              Match #{match.matchNumber || match.meta?.match_number || match.numericId} • {match.round}
                             </span>
                             {event && (
                               <span className="text-xs bg-muted px-2 py-0.5 rounded font-medium text-muted-foreground">
@@ -225,7 +225,7 @@ export default function Schedule() {
               <DialogDescription>
                 {activeMatch && (
                   <span>
-                    Match #{activeMatch.numericId} ({activeMatch.round})
+                    Match #{activeMatch.matchNumber || activeMatch.meta?.match_number || activeMatch.numericId} ({activeMatch.round})
                   </span>
                 )}
               </DialogDescription>

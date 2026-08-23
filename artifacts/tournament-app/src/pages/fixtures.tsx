@@ -650,7 +650,7 @@ export default function Fixtures() {
                                   >
                                     <div className="flex items-center justify-between text-xs text-muted-foreground border-b pb-2">
                                       <span className="font-bold text-foreground">
-                                        Match #{match.numericId} {match.location ? `• ${match.location}` : ''}
+                                        Match #{match.matchNumber || match.meta?.match_number || match.numericId} {match.location ? `• ${match.location}` : ''}
                                       </span>
                                       <StatusBadge status={match.status} />
                                     </div>

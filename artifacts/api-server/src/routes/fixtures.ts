@@ -148,12 +148,15 @@ router.post("/generate", async (req, res) => {
       } catch {}
 
       const generatedMatches: any[] = [];
+      let tournamentMatchCounter = 1;
       for (const [location, players] of Object.entries(locationMap || {})) {
         const locationMatches = buildBracketDraftMatches(eventId, location, players, format);
         for (const match of locationMatches) {
+          const matchNum = typeof match.meta?.match_number === 'number' ? match.meta.match_number : tournamentMatchCounter++;
+          const meta = { ...(match.meta || {}), match_number: matchNum };
           const result = await p.query(
             'INSERT INTO matches(event_id, round, player1_id, player2_id, winner_id, status, scheduled_date, meta) VALUES($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-            [eventId, match.round, match.player1_id, match.player2_id, match.winner_id, match.status, null, JSON.stringify(match.meta)]
+            [eventId, match.round, match.player1_id, match.player2_id, match.winner_id, match.status, null, JSON.stringify(meta)]
           );
           generatedMatches.push(result.rows[0]);
         }

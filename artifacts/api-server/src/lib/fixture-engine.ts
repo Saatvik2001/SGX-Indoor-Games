@@ -163,6 +163,7 @@ export function buildSingleEliminationMatches(
   }
 
   const allDraftMatches: GeneratedDraftMatch[] = [];
+  let matchCounter = 1;
 
   // Build Round 1 Matches
   for (let slot = 0; slot < matchSlotsCount; slot++) {
@@ -185,7 +186,8 @@ export function buildSingleEliminationMatches(
         round_level: 0,
         half,
         is_bye: item.isBye,
-        bye_player: item.byePlayer || null
+        bye_player: item.byePlayer || null,
+        match_number: matchCounter++
       }
     });
   }
@@ -209,7 +211,8 @@ export function buildSingleEliminationMatches(
           location,
           bracket_index: index,
           round_level: roundLevel,
-          half
+          half,
+          match_number: matchCounter++
         }
       });
     }
@@ -352,7 +355,7 @@ export function buildDoubleRoundRobinMatches(
   const isOdd = N % 2 !== 0;
   const leg1Rounds = isOdd ? N : N - 1;
 
-  const leg2Matches: GeneratedDraftMatch[] = leg1Matches.map(m => {
+  const leg2Matches: GeneratedDraftMatch[] = leg1Matches.map((m, index) => {
     const leg2RoundNum = (m.meta.round_number || m.roundLevel + 1) + leg1Rounds;
     return {
       round: `Round ${leg2RoundNum}`,
@@ -367,7 +370,8 @@ export function buildDoubleRoundRobinMatches(
         format: 'Double Round Robin',
         round_number: leg2RoundNum,
         round_level: m.roundLevel + leg1Rounds,
-        leg: 2
+        leg: 2,
+        match_number: leg1Matches.length + index + 1
       }
     };
   });

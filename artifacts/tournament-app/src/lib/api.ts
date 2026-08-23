@@ -36,6 +36,7 @@ export interface AppRegistration {
 export interface AppMatch {
   id: string; // "M123"
   numericId: number;
+  matchNumber: number;
   eventId: string;
   round: string;
   roundLevel: number;
@@ -175,16 +176,18 @@ export async function fetchMatches(eventId?: string): Promise<AppMatch[]> {
     if (!res.ok) return [];
     const rows = await res.json();
     if (!Array.isArray(rows)) return [];
-    return rows.map((r: any) => {
+    return rows.map((r: any, index: number) => {
       let meta = r.meta;
       if (typeof meta === 'string') {
         try { meta = JSON.parse(meta); } catch { meta = {}; }
       }
       meta = typeof meta === 'object' && meta !== null ? meta : {};
+      const matchNum = Number(meta.match_number ?? meta.matchNumber ?? r.match_number ?? (index + 1));
 
       return {
         id: `M${r.id}`,
         numericId: Number(r.id),
+        matchNumber: matchNum,
         eventId: r.event_id,
         round: r.round,
         roundLevel: Number(meta.round_level ?? 0),

@@ -572,9 +572,12 @@ class FileFallbackStore {
       if (effectiveParticipants.length === 0) continue;
 
       const shuffled = shufflePlayers(effectiveParticipants);
+      let tournamentMatchCounter = 1;
       const locationMatches = buildBracketDraftMatches(eventId, location, shuffled, format);
       for (const match of locationMatches) {
-        generated.push({ ...match, id: nextId++ });
+        const matchNum = typeof match.meta?.match_number === 'number' ? match.meta.match_number : tournamentMatchCounter++;
+        const meta = { ...(match.meta || {}), match_number: matchNum };
+        generated.push({ ...match, meta, id: nextId++ });
       }
     }
 

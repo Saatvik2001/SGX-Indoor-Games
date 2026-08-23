@@ -729,7 +729,7 @@ export default function AdminFixtures() {
                                     >
                                       <div className="flex items-center justify-between text-xs border-b pb-2">
                                         <span className="font-bold text-foreground">
-                                          Match #{match.numericId} {match.location ? `• ${match.location}` : ''}
+                                          Match #{match.matchNumber || match.meta?.match_number || match.numericId} {match.location ? `• ${match.location}` : ''}
                                         </span>
                                         <StatusBadge status={match.status} />
                                       </div>
@@ -890,7 +890,7 @@ export default function AdminFixtures() {
                                     <div className="flex items-center justify-between text-xs text-muted-foreground border-b pb-2">
                                       <div className="flex items-center gap-1.5">
                                         <span className="font-bold text-foreground">
-                                          Match #{match.numericId}
+                                          Match #{match.matchNumber || match.meta?.match_number || match.numericId}
                                         </span>
                                         {half && (
                                           <span className="text-2xs font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">

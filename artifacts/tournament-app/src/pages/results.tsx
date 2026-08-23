@@ -323,7 +323,7 @@ function MatchResultCard({ match, registrations }: { match: AppMatch; registrati
     >
       <div className="flex items-center justify-between text-xs text-muted-foreground border-b pb-3">
         <div className="flex items-center gap-2">
-          <span className="font-bold text-foreground">Match #{match.numericId}</span>
+          <span className="font-bold text-foreground">Match #{match.matchNumber || match.meta?.match_number || match.numericId}</span>
           <span>&bull;</span>
           <span className="font-semibold text-primary">{match.round}</span>
           {match.location && (

@@ -313,3 +313,34 @@ test('Doubles partial registration saves single player without partner and exclu
   assert.ok(players.includes('TEAM:PA:PB'));
   assert.ok(players.includes('TEAM:PC:PD'));
 });
+
+test('Fresh Tournament Match Numbering resets to Match 1 for new tournament sessions', async () => {
+  // Tournament A with 4 players (3 matches total)
+  const eventIdA = 't-a-event-1';
+  await fallbackStore.addEvent({ id: eventIdA, tournamentId: 'tourn-a', name: 'Tourn A Event', type: 'Singles', game: 'Badminton', meta: {} });
+  await fallbackStore.addRegistrations([
+    { employeeId: 'TA1', providedEmployeeId: 'TA1', employeeName: 'Player A1', eventId: eventIdA, eventType: 'Singles', location: 'Irrum Manzil' },
+    { employeeId: 'TA2', providedEmployeeId: 'TA2', employeeName: 'Player A2', eventId: eventIdA, eventType: 'Singles', location: 'Irrum Manzil' },
+    { employeeId: 'TA3', providedEmployeeId: 'TA3', employeeName: 'Player A3', eventId: eventIdA, eventType: 'Singles', location: 'Irrum Manzil' },
+    { employeeId: 'TA4', providedEmployeeId: 'TA4', employeeName: 'Player A4', eventId: eventIdA, eventType: 'Singles', location: 'Irrum Manzil' },
+  ]);
+
+  const matchesA = await fallbackStore.generateFixtures(eventIdA);
+  assert.equal(matchesA.length, 3);
+  assert.equal(matchesA[0].meta.match_number, 1);
+  assert.equal(matchesA[1].meta.match_number, 2);
+  assert.equal(matchesA[2].meta.match_number, 3);
+
+  // Tournament B created after Tournament A
+  const eventIdB = 't-b-event-1';
+  await fallbackStore.addEvent({ id: eventIdB, tournamentId: 'tourn-b', name: 'Tourn B Event', type: 'Singles', game: 'Table Tennis', meta: {} });
+  await fallbackStore.addRegistrations([
+    { employeeId: 'TB1', providedEmployeeId: 'TB1', employeeName: 'Player B1', eventId: eventIdB, eventType: 'Singles', location: 'Hitech City' },
+    { employeeId: 'TB2', providedEmployeeId: 'TB2', employeeName: 'Player B2', eventId: eventIdB, eventType: 'Singles', location: 'Hitech City' },
+  ]);
+
+  const matchesB = await fallbackStore.generateFixtures(eventIdB);
+  assert.equal(matchesB.length, 1);
+  // Tournament B must start at Match 1, not continue from Tournament A's Match 3 or 4
+  assert.equal(matchesB[0].meta.match_number, 1);
+});

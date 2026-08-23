@@ -197,7 +197,7 @@ export default function AdminResults() {
                         <div className="space-y-1.5 flex-1">
                           <div className="flex items-center gap-3">
                             <StatusBadge status={match.status} />
-                            <span className="font-bold text-sm">Match #{match.numericId} • {match.round}</span>
+                            <span className="font-bold text-sm">Match #{match.matchNumber || match.meta?.match_number || match.numericId} • {match.round}</span>
                             {event && (
                               <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded font-medium">
                                 {event.name}
@@ -263,7 +263,7 @@ export default function AdminResults() {
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-xs text-primary">{event?.name || match.eventId}</span>
-                          <span className="text-xs text-muted-foreground">• Match #{match.numericId} ({match.round})</span>
+                          <span className="text-xs text-muted-foreground">• Match #{match.matchNumber || match.meta?.match_number || match.numericId} ({match.round})</span>
                         </div>
                         <div className="text-xs text-muted-foreground">
                           {p1.display} vs {p2.display}
@@ -308,7 +308,7 @@ export default function AdminResults() {
               <DialogTitle>Record Match Result</DialogTitle>
               <DialogDescription>
                 {selectedMatch && (
-                  <span>Match #{selectedMatch.numericId} • {selectedMatch.round}</span>
+                  <span>Match #{selectedMatch.matchNumber || selectedMatch.meta?.match_number || selectedMatch.numericId} • {selectedMatch.round}</span>
                 )}
               </DialogDescription>
             </DialogHeader>
