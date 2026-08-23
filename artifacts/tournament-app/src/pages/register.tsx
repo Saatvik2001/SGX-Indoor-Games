@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { Trophy, CheckCircle2, UserPlus } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { fetchEvents, type AppEvent } from '@/lib/api';
+import { fetchEvents, apiUrl, type AppEvent } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 export default function Register() {
@@ -71,7 +71,7 @@ export default function Register() {
     });
 
     try {
-      const res = await fetch('/api/registrations', {
+      const res = await fetch(apiUrl('/api/registrations'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ registrations: payloads })

@@ -14,6 +14,7 @@ import {
   fetchRegistrations,
   fetchMatches,
   getParticipantDisplay,
+  apiUrl,
   type AppEvent,
   type AppRegistration,
   type AppMatch
@@ -84,7 +85,7 @@ export default function AdminResults() {
 
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/matches/${selectedMatch.numericId}`, {
+      const res = await fetch(apiUrl(`/api/matches/${selectedMatch.numericId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

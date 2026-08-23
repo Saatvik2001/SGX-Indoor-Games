@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { events } from '@/data/events';
 import { matches } from '@/data/matches';
 import { employees } from '@/data/employees';
+import { apiUrl } from '@/lib/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
 export default function Reports() {
@@ -15,7 +16,7 @@ export default function Reports() {
     let mounted = true;
     const loadRegistrations = async () => {
       try {
-        const res = await fetch('/api/registrations');
+        const res = await fetch(apiUrl('/api/registrations'));
         if (!mounted) return;
         if (res.ok) {
           const rows = await res.json();

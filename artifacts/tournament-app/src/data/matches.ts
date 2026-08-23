@@ -135,7 +135,8 @@ if (typeof window !== 'undefined') {
         const parsed = JSON.parse(raw) as Match[];
         if (Array.isArray(parsed)) matches = parsed;
       }
-      const res = await fetch('/api/matches');
+      const apiBase = typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL ? import.meta.env.VITE_API_URL.replace(/\/$/, '') : '';
+      const res = await fetch(apiBase ? `${apiBase}/api/matches` : '/api/matches');
       if (!res.ok) return;
       const rows = await res.json();
       const serverMatches: Match[] = rows.map((r: any) => ({

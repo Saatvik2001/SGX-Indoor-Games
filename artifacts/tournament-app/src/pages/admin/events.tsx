@@ -24,6 +24,7 @@ import {
   fetchEvents,
   fetchTournaments,
   fetchRegistrations,
+  apiUrl,
   type AppEvent,
   type AppTournament,
   type AppRegistration
@@ -146,12 +147,12 @@ export default function Events() {
           };
 
           await Promise.all([
-            fetch('/api/events', {
+            fetch(apiUrl('/api/events'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(p1)
             }),
-            fetch('/api/events', {
+            fetch(apiUrl('/api/events'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(p2)
@@ -174,7 +175,7 @@ export default function Events() {
             meta: { location: formLocation, format: formFormat }
           };
 
-          const res = await fetch('/api/events', {
+          const res = await fetch(apiUrl('/api/events'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -195,7 +196,7 @@ export default function Events() {
           meta: { location: formLocation, format: formFormat }
         };
 
-        const res = await fetch(`/api/events/${editingId}`, {
+        const res = await fetch(apiUrl(`/api/events/${editingId}`), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -217,7 +218,7 @@ export default function Events() {
     if (!window.confirm(`Delete event "${event.name}" and all its fixtures & registrations?`)) return;
 
     try {
-      const res = await fetch(`/api/events/${event.id}`, { method: 'DELETE' });
+      const res = await fetch(apiUrl(`/api/events/${event.id}`), { method: 'DELETE' });
       if (!res.ok) {
         toast({ title: 'Error', description: 'Failed to delete event.' });
         return;

@@ -74,9 +74,21 @@ export interface TournamentSummaryStats {
   lowerHalfCount?: number;
 }
 
+const RAW_API_BASE = typeof import.meta !== 'undefined' && import.meta.env ? (import.meta.env.VITE_API_URL || '') : '';
+export const API_BASE = RAW_API_BASE.replace(/\/$/, '');
+
+export function apiUrl(endpoint: string): string {
+  if (endpoint.startsWith('http')) return endpoint;
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  if (API_BASE) {
+    return `${API_BASE}${cleanEndpoint}`;
+  }
+  return cleanEndpoint;
+}
+
 export async function fetchEvents(): Promise<AppEvent[]> {
   try {
-    const res = await fetch('/api/events');
+    const res = await fetch(apiUrl('/api/events'));
     if (!res.ok) return [];
     const rows = await res.json();
     if (!Array.isArray(rows)) return [];
@@ -99,7 +111,7 @@ export async function fetchEvents(): Promise<AppEvent[]> {
 
 export async function fetchFixtureSummary(eventId: string): Promise<TournamentSummaryStats | null> {
   try {
-    const res = await fetch(`/api/fixtures/summary/${eventId}`);
+    const res = await fetch(apiUrl(`/api/fixtures/summary/${eventId}`));
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -109,7 +121,7 @@ export async function fetchFixtureSummary(eventId: string): Promise<TournamentSu
 
 export async function fetchTournaments(): Promise<AppTournament[]> {
   try {
-    const res = await fetch('/api/tournaments');
+    const res = await fetch(apiUrl('/api/tournaments'));
     if (!res.ok) return [];
     const rows = await res.json();
     if (!Array.isArray(rows)) return [];
@@ -135,7 +147,7 @@ export async function fetchRegistrations(eventId?: string, location?: string): P
     if (eventId) params.set('eventId', eventId);
     if (location && location !== 'All') params.set('location', location);
     const url = `/api/registrations${params.toString() ? `?${params.toString()}` : ''}`;
-    const res = await fetch(url);
+    const res = await fetch(apiUrl(url));
     if (!res.ok) return [];
     const rows = await res.json();
     if (!Array.isArray(rows)) return [];
@@ -159,7 +171,7 @@ export async function fetchRegistrations(eventId?: string, location?: string): P
 export async function fetchMatches(eventId?: string): Promise<AppMatch[]> {
   try {
     const url = eventId ? `/api/matches?eventId=${eventId}` : '/api/matches';
-    const res = await fetch(url);
+    const res = await fetch(apiUrl(url));
     if (!res.ok) return [];
     const rows = await res.json();
     if (!Array.isArray(rows)) return [];

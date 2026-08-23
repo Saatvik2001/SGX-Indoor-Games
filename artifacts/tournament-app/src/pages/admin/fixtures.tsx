@@ -28,6 +28,7 @@ import {
   fetchRegistrations,
   fetchMatches,
   getParticipantDisplay,
+  apiUrl,
   saveMatchWinner,
   type AppEvent,
   type AppRegistration,
@@ -143,7 +144,7 @@ export default function AdminFixtures() {
     setSavingWinner(prev => ({ ...prev, [match.id]: true }));
     try {
       const score = matchScores[match.id] || '';
-      const res = await fetch(`/api/matches/${match.numericId}`, {
+      const res = await fetch(apiUrl(`/api/matches/${match.numericId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -199,7 +200,7 @@ export default function AdminFixtures() {
         perLocationPlayerIds[loc].push(r.employeeId);
       }
 
-      const res = await fetch('/api/fixtures/generate', {
+      const res = await fetch(apiUrl('/api/fixtures/generate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

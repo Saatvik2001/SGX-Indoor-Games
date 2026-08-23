@@ -23,7 +23,7 @@ import {
 import { StatusBadge } from '@/components/StatusBadge';
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
-import { fetchTournaments, type AppTournament } from '@/lib/api';
+import { fetchTournaments, apiUrl, type AppTournament } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 export default function Tournaments() {
@@ -123,7 +123,7 @@ export default function Tournaments() {
           status: formStatus
         };
 
-        const res = await fetch('/api/tournaments', {
+        const res = await fetch(apiUrl('/api/tournaments'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -149,7 +149,7 @@ export default function Tournaments() {
           status: formStatus
         };
 
-        const res = await fetch(`/api/tournaments/${editingId}`, {
+        const res = await fetch(apiUrl(`/api/tournaments/${editingId}`), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -174,7 +174,7 @@ export default function Tournaments() {
     if (!window.confirm(`Delete tournament "${t.name}" and all its events, registrations, and matches?`)) return;
 
     try {
-      const res = await fetch(`/api/tournaments/${t.id}`, { method: 'DELETE' });
+      const res = await fetch(apiUrl(`/api/tournaments/${t.id}`), { method: 'DELETE' });
       if (res.ok) {
         toast({ title: 'Tournament Deleted' });
         await loadData();
