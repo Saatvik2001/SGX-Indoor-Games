@@ -48,7 +48,7 @@ export const getRegistrationsByEvent = (eventId: string) =>
 export const getRegistrationsByEmployee = (employeeId: string) =>
   registrations.filter(r => r.employeeId === employeeId);
 
-export const getRegisteredEmployeeIdsByEventAndLocation = (eventId: string, location: 'Hyderabad' | 'Bangalore') => {
+export const getRegisteredEmployeeIdsByEventAndLocation = (eventId: string, location: 'Irrum Manzil' | 'Hitech City' | string) => {
   // Return anonymized IDs from registrations that match the event and location.
   const regs = getRegistrationsByEvent(eventId).filter(r => r.location === location).map(r => r.employeeId);
   return regs;

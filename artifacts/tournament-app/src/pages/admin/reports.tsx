@@ -200,12 +200,12 @@ export default function Reports() {
                 <h4 className="font-semibold text-sm text-muted-foreground">By Location</h4>
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
-                    <span>Hyderabad</span>
-                    <span className="font-medium">{employees.filter(e => e.location === 'Hyderabad').length}</span>
+                    <span>Irrum Manzil</span>
+                    <span className="font-medium">{regs.filter(r => (r.location || '').includes('Irrum')).length}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Bangalore</span>
-                    <span className="font-medium">{employees.filter(e => e.location === 'Bangalore').length}</span>
+                    <span>Hitech City</span>
+                    <span className="font-medium">{regs.filter(r => (r.location || '').includes('Hitech')).length}</span>
                   </div>
                 </div>
               </div>

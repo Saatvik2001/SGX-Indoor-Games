@@ -14,10 +14,10 @@ export interface Tournament {
 
 export const tournaments: Tournament[] = [
   {
-    id: "T001",
-    name: "Office Indoor Games 2026",
-    description: "Annual company-wide indoor sports tournament featuring Table Tennis, Carrom, and Chess across both office locations.",
-    location: "Hyderabad & Bangalore",
+    id: "solugenix-indoor-2026",
+    name: "Solugenix Corporate Indoor Championship 2026",
+    description: "Annual corporate sports championship featuring Table Tennis, Badminton, Chess, and Carrom across Irrum Manzil and Hitech City campuses.",
+    location: "Irrum Manzil & Hitech City",
     registrationStartDate: "2026-01-15",
     registrationEndDate: "2026-02-15",
     tournamentStartDate: "2026-03-01",

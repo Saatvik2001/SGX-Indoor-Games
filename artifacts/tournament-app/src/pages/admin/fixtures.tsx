@@ -545,7 +545,7 @@ export default function AdminFixtures() {
                       Location Filter:
                     </Label>
                     <div className="flex items-center gap-1.5 bg-muted p-1 rounded-lg">
-                      {['All', 'Hyderabad', 'Bangalore'].map(loc => (
+                      {['All', 'Irrum Manzil', 'Hitech City'].map(loc => (
                         <button
                           key={loc}
                           onClick={() => setLocationFilter(loc)}

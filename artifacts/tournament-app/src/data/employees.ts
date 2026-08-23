@@ -3,7 +3,7 @@ export interface Employee {
   name: string;
   email: string;
   department: string;
-  location: "Hyderabad" | "Bangalore";
+  location: "Irrum Manzil" | "Hitech City";
 }
 
 
@@ -11,4 +11,4 @@ export interface Employee {
 export const employees: Employee[] = [];
 
 export const getEmployeeById = (id: string): Employee | undefined => undefined;
-export const getEmployeesByLocation = (location: "Hyderabad" | "Bangalore"): Employee[] => [];
+export const getEmployeesByLocation = (location: "Irrum Manzil" | "Hitech City"): Employee[] => [];
