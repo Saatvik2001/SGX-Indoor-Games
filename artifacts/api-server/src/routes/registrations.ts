@@ -50,10 +50,14 @@ router.post("/", async (req, res) => {
         const p1 = String(r.employeeId || r.providedEmployeeId || r.employee_id || '').trim();
         const p1Provided = String(r.providedEmployeeId || p1).trim();
         const p1Name = String(r.employeeName || r.employee_name || p1).trim();
-        const p1Dept = r.department ? String(r.department).trim() : null;
+        const p1Dept = r.project || r.department ? String(r.project || r.department).trim() : null;
 
         if (!p1) {
           throw new Error('Employee ID is required.');
+        }
+
+        if (!p1.toLowerCase().startsWith('sg')) {
+          throw new Error('Employee ID must start with SG prefix (e.g. SG123, sg101).');
         }
 
         if (!isDoubles) {
@@ -77,9 +81,15 @@ router.post("/", async (req, res) => {
           const p2Raw = r.partnerId || r.partner_id;
           const p2 = p2Raw ? String(p2Raw).trim() : null;
           const p2Name = r.partnerName || r.partner_name ? String(r.partnerName || r.partner_name).trim() : (p2 || '');
-          const p2Dept = r.partnerDepartment || r.partner_department ? String(r.partnerDepartment || r.partner_department).trim() : p1Dept;
+          const p2Dept = r.partnerProject || r.partner_project || r.partnerDepartment || r.partner_department
+            ? String(r.partnerProject || r.partner_project || r.partnerDepartment || r.partner_department).trim()
+            : p1Dept;
 
           if (p2) {
+            if (!p2.toLowerCase().startsWith('sg')) {
+              throw new Error('Partner Employee ID must start with SG prefix (e.g. SG123, sg101).');
+            }
+
             if (p1.toLowerCase() === p2.toLowerCase()) {
               throw new Error('A player cannot be their own Doubles partner.');
             }
@@ -186,6 +196,9 @@ router.put("/:id/partner", async (req, res) => {
 
       const p1 = reg.employee_id;
       const p2 = String(partnerId).trim();
+      if (!p2.toLowerCase().startsWith('sg')) {
+        throw new Error('Partner Employee ID must start with SG prefix (e.g. SG123, sg101).');
+      }
       if (p1.toLowerCase() === p2.toLowerCase()) {
         throw new Error('A player cannot be their own Doubles partner.');
       }

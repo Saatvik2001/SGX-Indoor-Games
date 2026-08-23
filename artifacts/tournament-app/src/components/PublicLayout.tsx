@@ -26,7 +26,7 @@ const navItems: NavItem[] = [
   { href: '/', label: 'Overview', icon: Flame },
   { href: '/register', label: 'Register', icon: UserPlus },
   { href: '/fixtures', label: 'Fixtures & Brackets', icon: Calendar },
-  { href: '/results', label: 'Live Results', icon: ClipboardList },
+  { href: '/results', label: 'Results', icon: ClipboardList },
   { href: '/champions', label: 'Hall of Fame', icon: Award },
 ];
 
@@ -57,9 +57,6 @@ export function PublicLayout({ children }: PublicLayoutProps) {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 group" data-testid="link-home">
             <SolugenixLogo size="md" className="group-hover:opacity-90 transition-opacity" />
-            <Badge variant="outline" className="text-2xs py-0 px-2 text-sky-600 dark:text-sky-400 border-sky-500/30 bg-sky-500/10 font-bold hidden md:inline-flex rounded-full">
-              LIVE
-            </Badge>
           </Link>
 
           {/* Desktop Navigation */}

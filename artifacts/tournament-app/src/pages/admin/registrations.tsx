@@ -38,7 +38,7 @@ type RegistrationRow = {
   id: string;
   providedEmployeeId: string;
   employeeName: string;
-  department: string;
+  project: string;
   location: string;
   eventName: string;
   eventId: string;
@@ -61,25 +61,21 @@ export default function Registrations() {
   const [assigningRow, setAssigningRow] = useState<RegistrationRow | null>(null);
   const [assignPartnerId, setAssignPartnerId] = useState('');
   const [assignPartnerName, setAssignPartnerName] = useState('');
-  const [assignPartnerDept, setAssignPartnerDept] = useState('');
+  const [assignPartnerProject, setAssignPartnerProject] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [eventsData, regsData] = await Promise.all([
+      const [events, r] = await Promise.all([
         fetchEvents(),
         fetchRegistrations()
       ]);
-      setEventsList(eventsData);
-      setRegs(regsData);
-
-      const query = new URLSearchParams(window.location.search);
-      const evParam = query.get('event');
-      if (evParam && eventsData.some(e => e.id === evParam)) {
-        setEventFilter(evParam);
-      }
+      setEventsList(events);
+      setRegs(r);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load registrations' });
     } finally {
       setLoading(false);
     }
@@ -100,7 +96,7 @@ export default function Registrations() {
         id: reg.id,
         providedEmployeeId: reg.providedEmployeeId || reg.employeeId || '-',
         employeeName: reg.employeeName || 'Unknown',
-        department: reg.department || 'General',
+        project: reg.project || reg.department || 'General',
         location: reg.location || 'Unknown',
         eventName: event?.name || reg.eventId || 'Unknown',
         eventId: reg.eventId,
@@ -127,17 +123,22 @@ export default function Registrations() {
     setAssigningRow(row);
     setAssignPartnerId('');
     setAssignPartnerName('');
-    setAssignPartnerDept('');
+    setAssignPartnerProject('');
     setAssignError(null);
   };
 
   const handleSavePartner = async () => {
     if (!assigningRow) return;
-    if (!assignPartnerId.trim()) {
+    const p2Clean = assignPartnerId.trim();
+    if (!p2Clean) {
       setAssignError('Partner Employee ID is required.');
       return;
     }
-    if (assignPartnerId.trim().toLowerCase() === assigningRow.providedEmployeeId.trim().toLowerCase()) {
+    if (!p2Clean.toLowerCase().startsWith('sg')) {
+      setAssignError('Partner Employee ID must start with SG prefix (e.g. SG123, sg101).');
+      return;
+    }
+    if (p2Clean.toLowerCase() === assigningRow.providedEmployeeId.trim().toLowerCase()) {
       setAssignError('A player cannot be their own Doubles partner.');
       return;
     }
@@ -147,9 +148,9 @@ export default function Registrations() {
 
     const res = await assignPartner(
       assigningRow.id,
-      assignPartnerId.trim(),
+      p2Clean,
       assignPartnerName.trim() || undefined,
-      assignPartnerDept.trim() || undefined
+      assignPartnerProject.trim() || undefined
     );
 
     setIsAssigning(false);
@@ -161,7 +162,7 @@ export default function Registrations() {
 
     toast({
       title: 'Partner Assigned! 🎉',
-      description: `Successfully paired ${assigningRow.employeeName} with ${assignPartnerName || assignPartnerId}.`
+      description: `Successfully paired ${assigningRow.employeeName} with ${assignPartnerName || p2Clean}.`
     });
 
     setAssigningRow(null);
@@ -179,8 +180,8 @@ export default function Registrations() {
       header: 'Player Name',
       cell: info => <span className="font-medium">{info.getValue()}</span>,
     }),
-    columnHelper.accessor('department', {
-      header: 'Department',
+    columnHelper.accessor('project', {
+      header: 'Project',
       cell: info => <span className="text-muted-foreground">{info.getValue()}</span>,
     }),
     columnHelper.accessor('location', {
@@ -300,7 +301,7 @@ export default function Registrations() {
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by participant name, ID, department, or partner..."
+                  placeholder="Search by participant name, ID, project, or partner..."
                   value={globalFilter}
                   onChange={(e) => setGlobalFilter(e.target.value)}
                   className="pl-9"
@@ -456,12 +457,12 @@ export default function Registrations() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="assignPartnerDept" className="text-sm font-semibold">Partner Department</Label>
+              <Label htmlFor="assignPartnerProject" className="text-sm font-semibold">Partner Project</Label>
               <Input
-                id="assignPartnerDept"
-                placeholder="e.g. Engineering, Sales"
-                value={assignPartnerDept}
-                onChange={(e) => setAssignPartnerDept(e.target.value)}
+                id="assignPartnerProject"
+                placeholder="e.g. Core Engineering, Digital Platform"
+                value={assignPartnerProject}
+                onChange={(e) => setAssignPartnerProject(e.target.value)}
               />
             </div>
 

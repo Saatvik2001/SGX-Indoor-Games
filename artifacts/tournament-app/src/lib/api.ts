@@ -26,6 +26,7 @@ export interface AppRegistration {
   providedEmployeeId: string;
   employeeName: string;
   department?: string | null;
+  project?: string | null;
   tournamentId: string;
   eventId: string;
   partnerId?: string | null;
@@ -157,7 +158,8 @@ export async function fetchRegistrations(eventId?: string, location?: string): P
       employeeId: r.employee_id || String(r.id),
       providedEmployeeId: r.provided_employee_id || r.employee_id || String(r.id),
       employeeName: r.employee_name || 'Participant',
-      department: r.department,
+      department: r.department || r.project,
+      project: r.project || r.department,
       tournamentId: r.tournament_id || 'T001',
       eventId: r.event_id,
       partnerId: r.partner_id,
@@ -283,13 +285,19 @@ export async function assignPartner(
   registrationId: string | number,
   partnerId: string,
   partnerName?: string,
+  partnerProject?: string,
   partnerDepartment?: string
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const res = await fetch(apiUrl(`/api/registrations/${registrationId}/partner`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ partnerId, partnerName, partnerDepartment }),
+      body: JSON.stringify({
+        partnerId,
+        partnerName,
+        partnerProject: partnerProject || partnerDepartment,
+        partnerDepartment: partnerDepartment || partnerProject
+      }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {

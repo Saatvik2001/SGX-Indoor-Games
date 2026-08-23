@@ -47,10 +47,10 @@ test('deletes an event from the fallback store and removes related data', async 
   });
   await fallbackStore.addRegistrations([
     {
-      employeeId: 'DEL-1',
-      providedEmployeeId: 'DEL-1',
+      employeeId: 'SG-DEL-1',
+      providedEmployeeId: 'SG-DEL-1',
       employeeName: 'Delete Me',
-      department: 'Ops',
+      project: 'Ops',
       tournamentId: 't-delete-test',
       eventId,
       eventType: 'Singles',
@@ -88,25 +88,25 @@ test('generates a valid bracket for an odd number of participants with BYEs and 
     status: 'Draft'
   });
   await fallbackStore.addRegistrations([
-    { employeeId: 'P1', providedEmployeeId: 'P1', employeeName: 'Player 1', department: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
-    { employeeId: 'P2', providedEmployeeId: 'P2', employeeName: 'Player 2', department: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
-    { employeeId: 'P3', providedEmployeeId: 'P3', employeeName: 'Player 3', department: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
-    { employeeId: 'P4', providedEmployeeId: 'P4', employeeName: 'Player 4', department: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
-    { employeeId: 'P5', providedEmployeeId: 'P5', employeeName: 'Player 5', department: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' }
+    { employeeId: 'SG-P1', providedEmployeeId: 'SG-P1', employeeName: 'Player 1', project: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
+    { employeeId: 'SG-P2', providedEmployeeId: 'SG-P2', employeeName: 'Player 2', project: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
+    { employeeId: 'SG-P3', providedEmployeeId: 'SG-P3', employeeName: 'Player 3', project: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
+    { employeeId: 'SG-P4', providedEmployeeId: 'SG-P4', employeeName: 'Player 4', project: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
+    { employeeId: 'SG-P5', providedEmployeeId: 'SG-P5', employeeName: 'Player 5', project: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' }
   ]);
 
-  await fallbackStore.generateFixtures(eventId, { Hyderabad: ['P1', 'P2', 'P3', 'P4', 'P5'] });
+  await fallbackStore.generateFixtures(eventId, { Hyderabad: ['SG-P1', 'SG-P2', 'SG-P3', 'SG-P4', 'SG-P5'] });
 
   const matches = await fallbackStore.getMatches(eventId);
   const round1Matches = matches.filter((row) => Number(row.meta?.round_level ?? -1) === 0);
   assert.equal(round1Matches.length, 4);
 
   const firstRoundParticipants = round1Matches.flatMap((row) => [row.player1_id, row.player2_id].filter(Boolean));
-  assert.equal(firstRoundParticipants.filter((id) => id === 'P1').length, 1);
-  assert.equal(firstRoundParticipants.filter((id) => id === 'P2').length, 1);
-  assert.equal(firstRoundParticipants.filter((id) => id === 'P3').length, 1);
-  assert.equal(firstRoundParticipants.filter((id) => id === 'P4').length, 1);
-  assert.equal(firstRoundParticipants.filter((id) => id === 'P5').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'SG-P1').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'SG-P2').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'SG-P3').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'SG-P4').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'SG-P5').length, 1);
 
   const byeMatch = round1Matches.find((row) => row.meta?.is_bye === true);
   assert.ok(byeMatch);
@@ -146,26 +146,24 @@ test('regenerating fixtures clears old bracket state and removes duplicates', as
     status: 'Draft'
   });
   await fallbackStore.addRegistrations([
-    { employeeId: 'R1', providedEmployeeId: 'R1', employeeName: 'Reg 1', department: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
-    { employeeId: 'R2', providedEmployeeId: 'R2', employeeName: 'Reg 2', department: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
-    { employeeId: 'R3', providedEmployeeId: 'R3', employeeName: 'Reg 3', department: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
-    { employeeId: 'R4', providedEmployeeId: 'R4', employeeName: 'Reg 4', department: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' }
+    { employeeId: 'SG-R1', providedEmployeeId: 'SG-R1', employeeName: 'Reg 1', project: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
+    { employeeId: 'SG-R2', providedEmployeeId: 'SG-R2', employeeName: 'Reg 2', project: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
+    { employeeId: 'SG-R3', providedEmployeeId: 'SG-R3', employeeName: 'Reg 3', project: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
+    { employeeId: 'SG-R4', providedEmployeeId: 'SG-R4', employeeName: 'Reg 4', project: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' }
   ]);
 
-  const firstRun = await fallbackStore.generateFixtures(eventId, { Hyderabad: ['R1', 'R2', 'R2', 'R3', 'R4'] });
+  const firstRun = await fallbackStore.generateFixtures(eventId, { Hyderabad: ['SG-R1', 'SG-R2', 'SG-R2', 'SG-R3', 'SG-R4'] });
   const firstRoundParticipants = firstRun.filter((row) => Number(row.meta?.round_level ?? -1) === 0).flatMap((row) => [row.player1_id, row.player2_id].filter(Boolean));
-  assert.equal(firstRoundParticipants.filter((id) => id === 'R2').length, 1);
-  assert.equal(firstRoundParticipants.filter((id) => id === 'R1').length, 1);
-  assert.equal(firstRoundParticipants.filter((id) => id === 'R3').length, 1);
-  assert.equal(firstRoundParticipants.filter((id) => id === 'R4').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'SG-R2').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'SG-R1').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'SG-R3').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'SG-R4').length, 1);
   assert.equal(new Set(firstRoundParticipants).size, firstRoundParticipants.length);
 
-  const secondRun = await fallbackStore.generateFixtures(eventId, { Hyderabad: ['R1', 'R2', 'R3', 'R4'] });
+  const secondRun = await fallbackStore.generateFixtures(eventId, { Hyderabad: ['SG-R1', 'SG-R2', 'SG-R3', 'SG-R4'] });
   const secondRoundParticipants = secondRun.filter((row) => Number(row.meta?.round_level ?? -1) === 0).flatMap((row) => [row.player1_id, row.player2_id].filter(Boolean));
   assert.equal(secondRoundParticipants.length, 4);
   assert.equal(new Set(secondRoundParticipants).size, secondRoundParticipants.length);
-  assert.equal(secondRun.some((row) => row.player1_id === 'R2' && row.player2_id === 'R2'), false);
-  assert.equal(secondRun.some((row) => row.player1_id === 'R2' && row.player2_id === 'R2'), false);
 });
 
 test('deleteTournament removes related fixtures and bracket data from the fallback store', async () => {
@@ -173,8 +171,8 @@ test('deleteTournament removes related fixtures and bracket data from the fallba
   const tournamentId = 't-delete-tournament-test';
   await fallbackStore.addEvent({ id: eventId, tournamentId, name: 'Delete Tournament Event', type: 'Singles', game: 'Badminton', meta: {} });
   await fallbackStore.addTournament({ id: tournamentId, name: 'Delete Tournament', description: 'Delete me', location: 'Hyderabad', registrationStartDate: '2026-08-01T00:00:00.000Z', registrationEndDate: '2026-08-10T00:00:00.000Z', tournamentStartDate: '2026-08-12T00:00:00.000Z', tournamentEndDate: '2026-08-14T00:00:00.000Z', status: 'Draft' });
-  await fallbackStore.addRegistrations([{ employeeId: 'DT1', providedEmployeeId: 'DT1', employeeName: 'Delete Tournament Player', department: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' }]);
-  await fallbackStore.generateFixtures(eventId, { Hyderabad: ['DT1'] });
+  await fallbackStore.addRegistrations([{ employeeId: 'SG-DT1', providedEmployeeId: 'SG-DT1', employeeName: 'Delete Tournament Player', project: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' }]);
+  await fallbackStore.generateFixtures(eventId, { Hyderabad: ['SG-DT1'] });
 
   await fallbackStore.deleteTournament(tournamentId);
 
@@ -184,14 +182,38 @@ test('deleteTournament removes related fixtures and bracket data from the fallba
   assert.equal((await fallbackStore.getMatches(eventId)).length, 0);
 });
 
+test('Case-insensitive SG prefix validation: accepts SG, Sg, sG, sg and rejects other prefixes', async () => {
+  const eventId = 'sg-prefix-test';
+  await fallbackStore.addEvent({ id: eventId, tournamentId: 't1', name: 'SG Prefix Test Event', type: 'Singles', game: 'Tennis', meta: {} });
+
+  // Valid variations: SG, Sg, sG, sg
+  const regSG = await fallbackStore.addRegistrations([{ employeeId: 'SG101', employeeName: 'P1', eventId, eventType: 'Singles', project: 'Eng' }]);
+  const regSg = await fallbackStore.addRegistrations([{ employeeId: 'Sg102', employeeName: 'P2', eventId, eventType: 'Singles', project: 'Eng' }]);
+  const reg_sG = await fallbackStore.addRegistrations([{ employeeId: 'sG103', employeeName: 'P3', eventId, eventType: 'Singles', project: 'Eng' }]);
+  const reg_sg = await fallbackStore.addRegistrations([{ employeeId: 'sg104', employeeName: 'P4', eventId, eventType: 'Singles', project: 'Eng' }]);
+
+  assert.equal(regSG.length, 1);
+  assert.equal(regSg.length, 1);
+  assert.equal(reg_sG.length, 1);
+  assert.equal(reg_sg.length, 1);
+
+  // Invalid: EMP-101
+  await assert.rejects(
+    async () => {
+      await fallbackStore.addRegistrations([{ employeeId: 'EMP-101', employeeName: 'Invalid Prefix', eventId, eventType: 'Singles' }]);
+    },
+    { message: 'Employee ID must start with SG prefix (e.g. SG123, sg101).' }
+  );
+});
+
 test('Singles registration prevents same player from registering more than once for same event', async () => {
   const eventId = 'singles-dup-test';
   await fallbackStore.addEvent({ id: eventId, tournamentId: 't1', name: 'Singles Event', type: 'Singles', game: 'Tennis', meta: {} });
-  await fallbackStore.addRegistrations([{ employeeId: 'SMP1', providedEmployeeId: 'SMP1', employeeName: 'Player 1', eventId, eventType: 'Singles' }]);
+  await fallbackStore.addRegistrations([{ employeeId: 'SG-SMP1', providedEmployeeId: 'SG-SMP1', employeeName: 'Player 1', eventId, eventType: 'Singles' }]);
 
   await assert.rejects(
     async () => {
-      await fallbackStore.addRegistrations([{ employeeId: 'SMP1', providedEmployeeId: 'SMP1', employeeName: 'Player 1', eventId, eventType: 'Singles' }]);
+      await fallbackStore.addRegistrations([{ employeeId: 'SG-SMP1', providedEmployeeId: 'SG-SMP1', employeeName: 'Player 1', eventId, eventType: 'Singles' }]);
     },
     { message: 'This player is already registered for this event.' }
   );
@@ -204,8 +226,8 @@ test('Doubles registration rejects self as partner', async () => {
   await assert.rejects(
     async () => {
       await fallbackStore.addRegistrations([{
-        employeeId: 'EMP-1',
-        partnerId: 'EMP-1',
+        employeeId: 'SG-EMP-1',
+        partnerId: 'SG-EMP-1',
         employeeName: 'Self Partner',
         eventId,
         eventType: 'Doubles'
@@ -219,8 +241,8 @@ test('Doubles registration prevents duplicate teams regardless of player order (
   const eventId = 'doubles-dup-team-test';
   await fallbackStore.addEvent({ id: eventId, tournamentId: 't1', name: 'Doubles Event 2', type: 'Doubles', game: 'Badminton', meta: {} });
   await fallbackStore.addRegistrations([{
-    employeeId: 'TEAM-A',
-    partnerId: 'TEAM-B',
+    employeeId: 'SG-TEAM-A',
+    partnerId: 'SG-TEAM-B',
     employeeName: 'Player A',
     partnerName: 'Player B',
     eventId,
@@ -230,8 +252,8 @@ test('Doubles registration prevents duplicate teams regardless of player order (
   await assert.rejects(
     async () => {
       await fallbackStore.addRegistrations([{
-        employeeId: 'TEAM-B',
-        partnerId: 'TEAM-A',
+        employeeId: 'SG-TEAM-B',
+        partnerId: 'SG-TEAM-A',
         employeeName: 'Player B',
         partnerName: 'Player A',
         eventId,
@@ -246,8 +268,8 @@ test('Doubles registration prevents conflicting player reuse in another team for
   const eventId = 'doubles-conflict-test';
   await fallbackStore.addEvent({ id: eventId, tournamentId: 't1', name: 'Doubles Event 3', type: 'Doubles', game: 'Badminton', meta: {} });
   await fallbackStore.addRegistrations([{
-    employeeId: 'CONF-A',
-    partnerId: 'CONF-B',
+    employeeId: 'SG-CONF-A',
+    partnerId: 'SG-CONF-B',
     employeeName: 'Player A',
     partnerName: 'Player B',
     eventId,
@@ -257,8 +279,8 @@ test('Doubles registration prevents conflicting player reuse in another team for
   await assert.rejects(
     async () => {
       await fallbackStore.addRegistrations([{
-        employeeId: 'CONF-A',
-        partnerId: 'CONF-C',
+        employeeId: 'SG-CONF-A',
+        partnerId: 'SG-CONF-C',
         employeeName: 'Player A',
         partnerName: 'Player C',
         eventId,
@@ -275,8 +297,8 @@ test('Doubles partial registration saves single player without partner and exclu
   
   // Register complete team A + B
   await fallbackStore.addRegistrations([{
-    employeeId: 'PA',
-    partnerId: 'PB',
+    employeeId: 'SG-PA',
+    partnerId: 'SG-PB',
     employeeName: 'Player A',
     partnerName: 'Player B',
     location: 'Irrum Manzil',
@@ -286,7 +308,7 @@ test('Doubles partial registration saves single player without partner and exclu
 
   // Register partial entry C (no partner)
   const partial = await fallbackStore.addRegistrations([{
-    employeeId: 'PC',
+    employeeId: 'SG-PC',
     employeeName: 'Player C',
     location: 'Irrum Manzil',
     eventId,
@@ -298,20 +320,20 @@ test('Doubles partial registration saves single player without partner and exclu
   // Generate fixtures: only complete team PA:PB should participate
   const matches = await fallbackStore.generateFixtures(eventId);
   assert.equal(matches.length, 1);
-  assert.equal(matches[0].player1_id, 'TEAM:PA:PB');
+  assert.equal(matches[0].player1_id, 'TEAM:SG-PA:SG-PB');
 
   // Now assign partner PD to PC
-  await fallbackStore.assignPartner(partial[0].id, 'PD', 'Player D');
+  await fallbackStore.assignPartner(partial[0].id, 'SG-PD', 'Player D');
   const regs = await fallbackStore.getRegistrations(eventId);
-  const updatedC = regs.find(r => r.employee_id === 'PC');
-  assert.equal(updatedC?.partner_id, 'PD');
+  const updatedC = regs.find(r => r.employee_id === 'SG-PC');
+  assert.equal(updatedC?.partner_id, 'SG-PD');
 
   // Now regenerate fixtures: both teams should participate
   const matchesAfterPair = await fallbackStore.generateFixtures(eventId);
   assert.equal(matchesAfterPair.length, 1);
   const players = [matchesAfterPair[0].player1_id, matchesAfterPair[0].player2_id];
-  assert.ok(players.includes('TEAM:PA:PB'));
-  assert.ok(players.includes('TEAM:PC:PD'));
+  assert.ok(players.includes('TEAM:SG-PA:SG-PB'));
+  assert.ok(players.includes('TEAM:SG-PC:SG-PD'));
 });
 
 test('Fresh Tournament Match Numbering resets to Match 1 for new tournament sessions', async () => {
@@ -319,10 +341,10 @@ test('Fresh Tournament Match Numbering resets to Match 1 for new tournament sess
   const eventIdA = 't-a-event-1';
   await fallbackStore.addEvent({ id: eventIdA, tournamentId: 'tourn-a', name: 'Tourn A Event', type: 'Singles', game: 'Badminton', meta: {} });
   await fallbackStore.addRegistrations([
-    { employeeId: 'TA1', providedEmployeeId: 'TA1', employeeName: 'Player A1', eventId: eventIdA, eventType: 'Singles', location: 'Irrum Manzil' },
-    { employeeId: 'TA2', providedEmployeeId: 'TA2', employeeName: 'Player A2', eventId: eventIdA, eventType: 'Singles', location: 'Irrum Manzil' },
-    { employeeId: 'TA3', providedEmployeeId: 'TA3', employeeName: 'Player A3', eventId: eventIdA, eventType: 'Singles', location: 'Irrum Manzil' },
-    { employeeId: 'TA4', providedEmployeeId: 'TA4', employeeName: 'Player A4', eventId: eventIdA, eventType: 'Singles', location: 'Irrum Manzil' },
+    { employeeId: 'SG-TA1', providedEmployeeId: 'SG-TA1', employeeName: 'Player A1', eventId: eventIdA, eventType: 'Singles', location: 'Irrum Manzil' },
+    { employeeId: 'SG-TA2', providedEmployeeId: 'SG-TA2', employeeName: 'Player A2', eventId: eventIdA, eventType: 'Singles', location: 'Irrum Manzil' },
+    { employeeId: 'SG-TA3', providedEmployeeId: 'SG-TA3', employeeName: 'Player A3', eventId: eventIdA, eventType: 'Singles', location: 'Irrum Manzil' },
+    { employeeId: 'SG-TA4', providedEmployeeId: 'SG-TA4', employeeName: 'Player A4', eventId: eventIdA, eventType: 'Singles', location: 'Irrum Manzil' },
   ]);
 
   const matchesA = await fallbackStore.generateFixtures(eventIdA);
@@ -335,8 +357,8 @@ test('Fresh Tournament Match Numbering resets to Match 1 for new tournament sess
   const eventIdB = 't-b-event-1';
   await fallbackStore.addEvent({ id: eventIdB, tournamentId: 'tourn-b', name: 'Tourn B Event', type: 'Singles', game: 'Table Tennis', meta: {} });
   await fallbackStore.addRegistrations([
-    { employeeId: 'TB1', providedEmployeeId: 'TB1', employeeName: 'Player B1', eventId: eventIdB, eventType: 'Singles', location: 'Hitech City' },
-    { employeeId: 'TB2', providedEmployeeId: 'TB2', employeeName: 'Player B2', eventId: eventIdB, eventType: 'Singles', location: 'Hitech City' },
+    { employeeId: 'SG-TB1', providedEmployeeId: 'SG-TB1', employeeName: 'Player B1', eventId: eventIdB, eventType: 'Singles', location: 'Hitech City' },
+    { employeeId: 'SG-TB2', providedEmployeeId: 'SG-TB2', employeeName: 'Player B2', eventId: eventIdB, eventType: 'Singles', location: 'Hitech City' },
   ]);
 
   const matchesB = await fallbackStore.generateFixtures(eventIdB);

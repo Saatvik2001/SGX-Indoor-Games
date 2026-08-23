@@ -188,10 +188,14 @@ class FileFallbackStore {
       const p1 = String(payload.employeeId || payload.providedEmployeeId || payload.employee_id || '').trim();
       const p1Provided = String(payload.providedEmployeeId || payload.employeeId || payload.employee_id || '').trim();
       const p1Name = String(payload.employeeName || payload.employee_name || p1).trim();
-      const p1Dept = payload.department ? String(payload.department).trim() : null;
+      const p1Dept = payload.project || payload.department ? String(payload.project || payload.department).trim() : null;
 
       if (!p1) {
         throw new Error('Employee ID is required.');
+      }
+
+      if (!p1.toLowerCase().startsWith('sg')) {
+        throw new Error('Employee ID must start with SG prefix (e.g. SG123, sg101).');
       }
 
       if (!isDoubles) {
@@ -227,11 +231,15 @@ class FileFallbackStore {
         const p2Name = payload.partnerName || payload.partner_name
           ? String(payload.partnerName || payload.partner_name).trim()
           : (p2 || '');
-        const p2Dept = payload.partnerDepartment || payload.partner_department
-          ? String(payload.partnerDepartment || payload.partner_department).trim()
+        const p2Dept = payload.partnerProject || payload.partner_project || payload.partnerDepartment || payload.partner_department
+          ? String(payload.partnerProject || payload.partner_project || payload.partnerDepartment || payload.partner_department).trim()
           : p1Dept;
 
         if (p2) {
+          if (!p2.toLowerCase().startsWith('sg')) {
+            throw new Error('Partner Employee ID must start with SG prefix (e.g. SG123, sg101).');
+          }
+
           // Rule: A player cannot be their own partner
           if (p1.toLowerCase() === p2.toLowerCase()) {
             throw new Error('A player cannot be their own Doubles partner.');
@@ -359,6 +367,9 @@ class FileFallbackStore {
     const p1 = reg1.employee_id.trim();
     const p2 = partnerId.trim();
     if (!p2) throw new Error('Partner ID is required.');
+    if (!p2.toLowerCase().startsWith('sg')) {
+      throw new Error('Partner Employee ID must start with SG prefix (e.g. SG123, sg101).');
+    }
     if (p1.toLowerCase() === p2.toLowerCase()) {
       throw new Error('A player cannot be their own Doubles partner.');
     }

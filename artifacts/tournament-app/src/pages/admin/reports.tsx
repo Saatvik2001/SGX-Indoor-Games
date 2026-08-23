@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { BarChart3, Download, TrendingUp } from 'lucide-react';
+import { BarChart3, Download, TrendingUp, Users, Trophy, Calendar, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchEvents, fetchMatches, fetchRegistrations, type AppEvent, type AppMatch, type AppRegistration } from '@/lib/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
@@ -35,15 +35,15 @@ export default function Reports() {
     return () => { mounted = false; };
   }, []);
 
-  const departmentData = useMemo(() => {
-    const defaultDepts = ['Engineering', 'HR', 'Finance', 'Marketing', 'Operations', 'Sales', 'Design', 'Legal'];
-    const foundDepts = Array.from(new Set(regs.map(r => r.department).filter(Boolean))) as string[];
-    const allDepts = Array.from(new Set([...defaultDepts, ...foundDepts]));
+  const projectData = useMemo(() => {
+    const defaultProjects = ['Engineering', 'HR', 'Finance', 'Marketing', 'Operations', 'Sales', 'Design', 'Legal'];
+    const foundProjects = Array.from(new Set(regs.map(r => r.project || r.department).filter(Boolean))) as string[];
+    const allProjects = Array.from(new Set([...defaultProjects, ...foundProjects]));
 
-    return allDepts.map(dept => ({
-      department: dept,
-      registrations: regs.filter(r => (r.department || 'General') === dept).length
-    })).filter(d => d.registrations > 0 || defaultDepts.includes(d.department));
+    return allProjects.map(proj => ({
+      project: proj,
+      registrations: regs.filter(r => (r.project || r.department || 'General') === proj).length
+    })).filter(d => d.registrations > 0 || defaultProjects.includes(d.project));
   }, [regs]);
 
   const eventProgress = useMemo(() => {
@@ -92,39 +92,54 @@ export default function Reports() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-2">Total Participants</p>
-                <p className="text-3xl font-bold text-primary">{regs.length}</p>
-              </div>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Total Registrations</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{regs.length}</div>
+              <p className="text-xs text-muted-foreground">Across {eventsList.length} events</p>
             </CardContent>
           </Card>
+
           <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-2">Total Matches</p>
-                <p className="text-3xl font-bold text-primary">{matchesList.length}</p>
-              </div>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Active Events</CardTitle>
+              <Trophy className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{eventsList.length}</div>
+              <p className="text-xs text-muted-foreground">Singles and Doubles</p>
             </CardContent>
           </Card>
+
           <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-2">Completion Rate</p>
-                <p className="text-3xl font-bold text-primary">
-                  {matchesList.length > 0 ? Math.round((matchesList.filter(m => m.status === "Completed").length / matchesList.length) * 100) : 0}%
-                </p>
-              </div>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Matches Generated</CardTitle>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{matchesList.length}</div>
+              <p className="text-xs text-muted-foreground">Total tournament matches</p>
             </CardContent>
           </Card>
+
           <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-2">Active Events</p>
-                <p className="text-3xl font-bold text-primary">{eventsList.length}</p>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Matches Completed</CardTitle>
+              <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {matchesList.filter(m => m.status === 'Completed').length}
               </div>
+              <p className="text-xs text-muted-foreground">
+                {matchesList.length > 0 
+                  ? `${Math.round((matchesList.filter(m => m.status === 'Completed').length / matchesList.length) * 100)}% overall completion`
+                  : '0% overall completion'}
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -135,15 +150,15 @@ export default function Reports() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5 text-primary" />
-                Department Participation
+                Project Participation
               </CardTitle>
-              <CardDescription>Participation count by department</CardDescription>
+              <CardDescription>Participation count by project</CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={departmentData}>
+                <BarChart data={projectData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="department" stroke="hsl(var(--muted-foreground))" fontSize={12} angle={-45} textAnchor="end" height={80} />
+                  <XAxis dataKey="project" stroke="hsl(var(--muted-foreground))" fontSize={12} angle={-45} textAnchor="end" height={80} />
                   <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} allowDecimals={false} />
                   <Tooltip 
                     contentStyle={{ 
