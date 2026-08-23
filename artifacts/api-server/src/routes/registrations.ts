@@ -124,6 +124,18 @@ router.post("/", async (req, res) => {
               throw new Error('This Doubles team is already registered.');
             }
 
+            // Check if exact same team is registered in another Doubles event (must have different partners across events)
+            const sameTeamInOtherEvent = await p.query(
+              `SELECT id FROM registrations WHERE event_id <> $1 AND (
+                (LOWER(employee_id) = LOWER($2) AND LOWER(partner_id) = LOWER($3)) OR
+                (LOWER(employee_id) = LOWER($3) AND LOWER(partner_id) = LOWER($2))
+              ) LIMIT 1`,
+              [evId, p1, p2]
+            );
+            if (sameTeamInOtherEvent.rows.length > 0) {
+              throw new Error('A player must have a different partner in each Doubles event.');
+            }
+
             // Insert Player 1
             const ins1 = await p.query(
               `INSERT INTO registrations(employee_id, provided_employee_id, employee_name, department, tournament_id, event_id, partner_id, location, registration_date)

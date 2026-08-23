@@ -366,3 +366,95 @@ test('Fresh Tournament Match Numbering resets to Match 1 for new tournament sess
   // Tournament B must start at Match 1, not continue from Tournament A's Match 3 or 4
   assert.equal(matchesB[0].meta.match_number, 1);
 });
+
+test('Doubles multi-event rules: allows Player X in Double A (X+Y) and Double B (X+Z) with different partners', async () => {
+  const eventDoubleA = 'event-double-a';
+  const eventDoubleB = 'event-double-b';
+
+  await fallbackStore.addEvent({ id: eventDoubleA, tournamentId: 't-multi-doubles', name: 'Double A', type: 'Doubles', game: 'Badminton', meta: {} });
+  await fallbackStore.addEvent({ id: eventDoubleB, tournamentId: 't-multi-doubles', name: 'Double B', type: 'Doubles', game: 'Table Tennis', meta: {} });
+
+  // 1. Register X + Y in Double A (Allowed)
+  const regA = await fallbackStore.addRegistrations([{
+    employeeId: 'SG-X',
+    partnerId: 'SG-Y',
+    employeeName: 'Player X',
+    partnerName: 'Player Y',
+    eventId: eventDoubleA,
+    eventType: 'Doubles'
+  }]);
+  assert.equal(regA.length, 2);
+
+  // 2. Register X + Z in Double B (Allowed because different partner in different doubles event)
+  const regB = await fallbackStore.addRegistrations([{
+    employeeId: 'SG-X',
+    partnerId: 'SG-Z',
+    employeeName: 'Player X',
+    partnerName: 'Player Z',
+    eventId: eventDoubleB,
+    eventType: 'Doubles'
+  }]);
+  assert.equal(regB.length, 2);
+
+  // 3. Attempt Double A -> X + Y duplicate (Rejected)
+  await assert.rejects(
+    async () => {
+      await fallbackStore.addRegistrations([{
+        employeeId: 'SG-X',
+        partnerId: 'SG-Y',
+        employeeName: 'Player X',
+        partnerName: 'Player Y',
+        eventId: eventDoubleA,
+        eventType: 'Doubles'
+      }]);
+    },
+    { message: 'This player is already part of another Doubles team for this event.' }
+  );
+
+  // 4. Attempt Double A -> Y + X reversed duplicate (Rejected)
+  await assert.rejects(
+    async () => {
+      await fallbackStore.addRegistrations([{
+        employeeId: 'SG-Y',
+        partnerId: 'SG-X',
+        employeeName: 'Player Y',
+        partnerName: 'Player X',
+        eventId: eventDoubleA,
+        eventType: 'Doubles'
+      }]);
+    },
+    { message: 'This player is already part of another Doubles team for this event.' }
+  );
+
+  // 5. Attempt Double B -> X + Y (Rejected because X already registered in Double B with Z)
+  await assert.rejects(
+    async () => {
+      await fallbackStore.addRegistrations([{
+        employeeId: 'SG-X',
+        partnerId: 'SG-Y',
+        employeeName: 'Player X',
+        partnerName: 'Player Y',
+        eventId: eventDoubleB,
+        eventType: 'Doubles'
+      }]);
+    },
+    { message: 'This player is already part of another Doubles team for this event.' }
+  );
+
+  // 6. Attempt Double C -> X + Y (Rejected because X+Y exact team already registered in Double A)
+  const eventDoubleC = 'event-double-c';
+  await fallbackStore.addEvent({ id: eventDoubleC, tournamentId: 't-multi-doubles', name: 'Double C', type: 'Doubles', game: 'Carrom', meta: {} });
+  await assert.rejects(
+    async () => {
+      await fallbackStore.addRegistrations([{
+        employeeId: 'SG-X',
+        partnerId: 'SG-Y',
+        employeeName: 'Player X',
+        partnerName: 'Player Y',
+        eventId: eventDoubleC,
+        eventType: 'Doubles'
+      }]);
+    },
+    { message: 'A player must have a different partner in each Doubles event.' }
+  );
+});

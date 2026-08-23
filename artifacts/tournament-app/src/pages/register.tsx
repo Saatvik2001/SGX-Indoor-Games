@@ -199,13 +199,21 @@ export default function Register() {
             return `Partner (${p2}) is already part of another Doubles team for ${evName}.`;
           }
 
-          // Check normalized duplicate team
+          // Check normalized duplicate team in this event
           const teamKey = [p1.toLowerCase(), p2.toLowerCase()].sort().join('___');
           const teamInEvent = existingRegs.some(
             r => r.eventId === evId && r.partnerId && [r.employeeId.toLowerCase(), r.partnerId.toLowerCase()].sort().join('___') === teamKey
           );
           if (teamInEvent) {
             return `This Doubles team is already registered for ${evName}.`;
+          }
+
+          // Check cross-event exact same team (different partners required across events)
+          const teamInOtherEvent = existingRegs.some(
+            r => r.eventId !== evId && r.partnerId && [r.employeeId.toLowerCase(), r.partnerId.toLowerCase()].sort().join('___') === teamKey
+          );
+          if (teamInOtherEvent) {
+            return `A player must have a different partner in each Doubles event. You are already paired with ${partnerName.trim() || p2} in another event.`;
           }
         }
       } else {

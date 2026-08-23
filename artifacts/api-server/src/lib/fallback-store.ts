@@ -278,14 +278,12 @@ class FileFallbackStore {
             throw new Error('This Doubles team is already registered.');
           }
 
-          // Rule: Cross-event duplicate team check if disallowed
-          if (payload.disallowCrossEventDuplicateTeams) {
-            const teamInOtherEvent = this.state.registrations.some(
-              (r) => r.event_id !== eventId && r.partner_id && [r.employee_id.toLowerCase(), r.partner_id.toLowerCase()].sort().join('___') === teamKey
-            );
-            if (teamInOtherEvent) {
-              throw new Error('This Doubles team has already participated in another event and cannot be registered again.');
-            }
+          // Rule: Cross-event duplicate team check (must have different partners across events)
+          const teamInOtherEvent = this.state.registrations.some(
+            (r) => r.event_id !== eventId && r.partner_id && [r.employee_id.toLowerCase(), r.partner_id.toLowerCase()].sort().join('___') === teamKey
+          );
+          if (teamInOtherEvent) {
+            throw new Error('A player must have a different partner in each Doubles event.');
           }
 
           // Insert Player 1
