@@ -89,9 +89,9 @@ router.post("/", async (req, res) => {
     });
 
     return res.status(201).json({ ok: true, insertedCount: inserted.length, inserted });
-  } catch (err) {
+  } catch (err: any) {
     logger.error({ err }, "Error handling registration");
-    return res.status(500).json({ error: "internal" });
+    return res.status(500).json({ error: err?.message || "internal" });
   }
 });
 
