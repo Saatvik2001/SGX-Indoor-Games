@@ -35,6 +35,23 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.get("/", (_req, res) => {
+  res.json({
+    name: "Solugenix Corporate Tournament API",
+    status: "online",
+    timestamp: new Date().toISOString(),
+    version: "1.0.0",
+    endpoints: {
+      health: "/api/health",
+      tournaments: "/api/tournaments",
+      events: "/api/events",
+      registrations: "/api/registrations",
+      matches: "/api/matches",
+      fixtures: "/api/fixtures"
+    }
+  });
+});
+
 app.use("/api", router);
 
 export default app;
