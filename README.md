@@ -4,60 +4,49 @@ A modern tournament management and live scorecard platform for Solugenix Corpora
 
 ---
 
-## 📁 Repository Structure
+## 📁 Project Overview
 
-```
-SGX-Indoor-Games/
-├── frontend/               # React + Vite + TailwindCSS UI Application
-│   ├── src/
-│   │   ├── components/     # SolugenixLogo, PublicLayout, AdminLayout, StatCard, UI
-│   │   ├── pages/          # Landing (Single Viewport), Fixtures, Results, Champions, Register, Admin
-│   │   ├── lib/            # Self-contained API Client & Utilities
-│   │   └── index.css       # Solugenix Brand Theme & Ambient Mesh Gradients
-│   ├── package.json
-│   └── vite.config.ts
-│
-├── backend/                # Express + Node.js API Server
-│   ├── src/
-│   │   ├── db/             # Drizzle ORM Schema & PostgreSQL Connection
-│   │   ├── routes/         # Tournaments, Events, Fixtures, Matches, Registrations
-│   │   └── lib/            # Knockout & Round-Robin Fixture Engine, Fallback Store
-│   ├── package.json
-│   └── tsconfig.json
-│
-└── README.md
-```
+- **`artifacts/tournament-app/`**: React + Vite + Tailwind CSS Solugenix UI Application.
+- **`artifacts/api-server/`**: Node.js + Express API Server with dynamic bracket engines.
+- **`lib/db/`**: Drizzle ORM Schema & PostgreSQL connection pool.
 
 ---
 
 ## 🚀 Quick Start Guide
 
-### 1. Frontend Setup
+### 1. Install Workspace Dependencies
 ```bash
-cd frontend
-npm install
-npm run dev
+pnpm install
 ```
-- Open browser at `http://localhost:5173`
 
-### 2. Backend Setup
-```bash
-cd backend
-npm install
-npm run dev
-```
-- API server runs at `http://127.0.0.1:4001`
+### 2. Run Applications
+- **Start Web Application**:
+  ```bash
+  pnpm --filter @workspace/tournament-app run dev
+  ```
+  App runs at `http://localhost:5173`
+
+- **Start API Server**:
+  ```bash
+  pnpm --filter @workspace/api-server run dev
+  ```
+  API server runs at `http://127.0.0.1:4001`
+
+- **Push Database Schema**:
+  ```bash
+  pnpm --filter @workspace/db run push
+  ```
 
 ---
 
 ## 🌐 Features
 
 - **Brand Design**: Solugenix Royal Blue (`#2563EB`) and Electric Sky Cyan (`#0EA5E9`) theme with luminous ambient background mesh.
-- **Single Viewport Overview**: Hero page fitted to 100vh with no scrollbar.
-- **Dynamic Tournaments**: Multi-venue support for *Irrum Manzil* & *Hitech City*.
-- **Fixtures & Brackets**: Knockout brackets, schedules, and live scorecards.
-- **Hall of Fame**: Champion podiums, winner laurels, and medal counters.
-- **Admin Console**: Full management for matches, participant rosters, and tournament statuses.
+- **Single Viewport Overview**: Hero page fitted to 100vh with zero scrollbar.
+- **Multi-Location Arenas**: Venues across *Irrum Manzil* & *Hitech City*.
+- **Fixtures & Interactive Brackets**: Knockout brackets, rest days, and live scorecards.
+- **Hall of Fame**: Champion podiums, winner laurels, and medal counts.
+- **Admin Console**: Real-time management for matches, participant rosters, and tournament statuses.
 
 ---
 

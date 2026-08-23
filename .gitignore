@@ -1,4 +1,4 @@
-# dependencies & build
+# Dependencies & builds
 node_modules
 dist
 .cache/
@@ -12,30 +12,13 @@ node/
 *.pid
 .store.json
 
-# Environment files
+# Environment variables
 .env
 .env.*
 !.env.example
 
-# IDE / System
+# IDE & OS
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
-
-# Legacy root workspace configs (Only frontend/ and backend/ are in repo)
-artifacts/
-lib/
-scripts/
-attached_assets/
-local/
-.npmrc
-.replit
-.replitignore
-curl-test.txt
-package.json
-pnpm-lock.yaml
-pnpm-workspace.yaml
-replit.md
-tsconfig.base.json
-tsconfig.json
