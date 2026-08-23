@@ -343,3 +343,13 @@ export async function saveMatchSchedule(
   });
   return res.ok;
 }
+
+export async function registerBatch(payloads: Record<string, unknown>[]): Promise<Response> {
+  return fetch(apiUrl('/api/registrations'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ registrations: payloads })
+  });
+}
+
+
