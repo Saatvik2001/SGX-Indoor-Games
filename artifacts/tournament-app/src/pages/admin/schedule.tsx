@@ -4,261 +4,300 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Calendar, Clock, MapPin, Edit } from 'lucide-react';
-import { getEventById } from '@/data/events';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Calendar, Clock, MapPin, Edit, CheckCircle } from 'lucide-react';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useToast } from '@/hooks/use-toast';
-import type { Registration } from '@/data/registrations';
-
-interface MatchRow {
-  id: string;
-  eventId: string;
-  round: string;
-  player1Id: string;
-  player2Id?: string;
-  status: 'Pending' | 'Scheduled' | 'Completed';
-  scheduledDate?: string;
-  scheduledTime?: string;
-  venue?: string;
-  winnerId?: string;
-  score?: string;
-}
+import {
+  fetchEvents,
+  fetchRegistrations,
+  fetchMatches,
+  getParticipantDisplay,
+  saveMatchSchedule,
+  type AppEvent,
+  type AppRegistration,
+  type AppMatch
+} from '@/lib/api';
 
 export default function Schedule() {
   const { toast } = useToast();
-  const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
+  const [events, setEvents] = useState<AppEvent[]>([]);
+  const [matches, setMatches] = useState<AppMatch[]>([]);
+  const [registrations, setRegistrations] = useState<AppRegistration[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Dialog State
+  const [activeMatch, setActiveMatch] = useState<AppMatch | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
   const [venue, setVenue] = useState('');
-  const [matchState, setMatchState] = useState<MatchRow[]>([]);
-  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [evs, regs, mat] = await Promise.all([
+        fetchEvents(),
+        fetchRegistrations(),
+        fetchMatches()
+      ]);
+      setEvents(evs);
+      setRegistrations(regs);
+      setMatches(mat);
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load scheduling data.' });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let mounted = true;
-    const fetchData = async () => {
-      try {
-        const [matchesRes, regsRes] = await Promise.all([
-          fetch('/api/matches'),
-          fetch('/api/registrations')
-        ]);
-        if (!mounted) return;
-
-        if (matchesRes.ok) {
-          const rows = await matchesRes.json();
-          const mapped = rows.map((r: any) => ({
-            id: `M${r.id}`,
-            eventId: r.event_id,
-            round: r.round,
-            player1Id: r.player1_id,
-            player2Id: r.player2_id || undefined,
-            status: r.status,
-            scheduledDate: r.scheduled_date || undefined,
-            scheduledTime: r.meta?.scheduled_time || undefined,
-            venue: r.meta?.venue || undefined,
-            winnerId: r.winner_id || undefined,
-            score: r.meta?.score || undefined,
-          }));
-          setMatchState(mapped);
-        }
-
-        if (regsRes.ok) {
-          const rows = await regsRes.json();
-          setRegistrations(rows.map((r: any) => ({
-            id: String(r.id),
-            employeeId: r.employee_id,
-            employeeName: r.employee_name,
-            providedEmployeeId: r.provided_employee_id,
-            department: r.department,
-            tournamentId: r.tournament_id,
-            eventId: r.event_id,
-            partnerId: r.partner_id,
-            location: r.location,
-            registrationDate: r.registration_date,
-          })));
-        }
-      } catch (e) {
-        // ignore
-      }
-    };
-    fetchData();
-    return () => { mounted = false; };
+    loadData();
   }, []);
 
-  const pendingAndScheduledMatches = matchState.filter(
-    m => m.status === 'Pending' || m.status === 'Scheduled'
-  );
+  const openScheduleDialog = (match: AppMatch) => {
+    setActiveMatch(match);
+    let dateStr = '';
+    if (match.scheduledDate) {
+      try {
+        dateStr = new Date(match.scheduledDate).toISOString().slice(0, 10);
+      } catch {}
+    }
+    setScheduleDate(dateStr);
+    setScheduleTime(match.scheduledTime || '');
+    setVenue(match.venue || '');
+    setIsDialogOpen(true);
+  };
 
-  const handleSchedule = async () => {
-    if (!selectedMatch || !scheduleDate || !scheduleTime || !venue) return;
-    const numericId = selectedMatch.replace(/^M/, '');
-    const scheduled_date = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
-    const meta = { scheduled_time: scheduleTime, venue };
-
-    try {
-      const res = await fetch(`/api/matches/${numericId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scheduled_date, meta, status: 'Scheduled' })
+  const handleSaveSchedule = async () => {
+    if (!activeMatch) return;
+    if (!scheduleDate || !scheduleTime || !venue.trim()) {
+      toast({
+        title: 'Missing Fields',
+        description: 'Please fill in Match Date, Time, and Venue/Court.'
       });
+      return;
+    }
 
-      if (!res.ok) {
-        toast({ title: 'Schedule failed', description: 'Server error' });
+    setSaving(true);
+    try {
+      const ok = await saveMatchSchedule(activeMatch.numericId, scheduleDate, scheduleTime, venue.trim());
+      if (!ok) {
+        toast({ title: 'Error', description: 'Failed to save schedule to database.' });
         return;
       }
 
-      setMatchState(prev => prev.map(m => m.id === selectedMatch ? {
-        ...m,
-        scheduledDate: scheduled_date,
-        scheduledTime: scheduleTime,
-        venue,
-        status: 'Scheduled'
-      } : m));
+      toast({
+        title: 'Match Scheduled! 📅',
+        description: `Successfully scheduled for ${scheduleDate} at ${scheduleTime} in ${venue}.`
+      });
 
-      toast({ title: 'Match Scheduled', description: 'Match has been successfully scheduled.' });
-      setSelectedMatch(null);
-      setScheduleDate('');
-      setScheduleTime('');
-      setVenue('');
-    } catch (e) {
-      toast({ title: 'Schedule failed', description: 'Network error' });
+      setIsDialogOpen(false);
+      setActiveMatch(null);
+      await loadData();
+    } catch {
+      toast({ title: 'Error', description: 'Network error saving schedule.' });
+    } finally {
+      setSaving(false);
     }
   };
+
+  const activeMatches = matches.filter(
+    m => m.status === 'Pending' || m.status === 'Scheduled'
+  );
 
   return (
     <AdminLayout>
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Match Scheduling</h1>
-          <p className="text-muted-foreground">Schedule match dates, times, and venues</p>
+          <p className="text-muted-foreground">Manually set match dates, times, and venues for upcoming matches</p>
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Pending & Scheduled Matches</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle>Matches for Scheduling</CardTitle>
+              <span className="text-sm text-muted-foreground">{activeMatches.length} Pending / Scheduled</span>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {pendingAndScheduledMatches.map(match => {
-                const player1 = registrations.find(r => r.employeeId === match.player1Id);
-                const player2 = match.player2Id ? registrations.find(r => r.employeeId === match.player2Id) : null;
-                const event = getEventById(match.eventId);
-                const displayDate = match.scheduledDate ? new Date(match.scheduledDate).toISOString().slice(0, 10) : '';
+            {loading ? (
+              <div className="text-center py-12 text-muted-foreground">Loading matches…</div>
+            ) : (
+              <div className="space-y-4">
+                {activeMatches.map(match => {
+                  const p1 = getParticipantDisplay(match.player1Id, registrations);
+                  const p2 = getParticipantDisplay(match.player2Id, registrations);
+                  const event = events.find(e => e.id === match.eventId);
+                  const isScheduled = match.status === 'Scheduled' && match.scheduledDate;
 
-                return (
-                  <div
-                    key={match.id}
-                    className="border rounded-lg p-4 hover:shadow-md transition-shadow"
-                    data-testid={`match-${match.id}`}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-3">
-                          <StatusBadge status={match.status} />
-                          <span className="font-semibold text-sm">{match.round}</span>
-                          <span className="text-sm text-muted-foreground">• {event?.name}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-sm">
-                          <span className="font-medium">
-                            {player1 ? `${player1.employeeName} (${player1.providedEmployeeId || player1.employeeId})` : 'TBD'}
-                          </span>
-                          <span className="text-muted-foreground">vs</span>
-                          <span className="font-medium">
-                            {player2 ? `${player2.employeeName} (${player2.providedEmployeeId || player2.employeeId})` : 'TBD'}
-                          </span>
-                        </div>
-
-                        {match.scheduledDate && (
-                          <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-2">
-                              <Calendar className="h-4 w-4" />
-                              <span>{new Date(match.scheduledDate).toLocaleDateString()}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Clock className="h-4 w-4" />
-                              <span>{match.scheduledTime}</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <MapPin className="h-4 w-4" />
-                              <span>{match.venue}</span>
-                            </div>
+                  return (
+                    <div
+                      key={match.id}
+                      className="border rounded-xl p-4 bg-card hover:shadow-md transition-shadow space-y-3"
+                      data-testid={`match-${match.id}`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex items-center gap-3">
+                            <StatusBadge status={match.status} />
+                            <span className="font-bold text-sm text-foreground">
+                              Match #{match.numericId} • {match.round}
+                            </span>
+                            {event && (
+                              <span className="text-xs bg-muted px-2 py-0.5 rounded font-medium text-muted-foreground">
+                                {event.name}
+                              </span>
+                            )}
                           </div>
-                        )}
-                      </div>
 
-                      <Dialog>
-                        <DialogTrigger asChild>
+                          <div className="flex items-center gap-2 text-sm font-semibold pt-1">
+                            <span className={p1.hasPlayer ? 'text-foreground' : 'text-muted-foreground'}>
+                              {p1.display}
+                            </span>
+                            <span className="text-xs text-muted-foreground font-normal">vs</span>
+                            <span className={p2.hasPlayer ? 'text-foreground' : 'text-muted-foreground'}>
+                              {p2.display}
+                            </span>
+                          </div>
+
+                          {isScheduled && (
+                            <div className="flex flex-wrap gap-4 text-xs font-medium text-primary pt-1 bg-primary/5 p-2 rounded-lg border border-primary/20">
+                              <div className="flex items-center gap-1.5">
+                                <Calendar className="h-3.5 w-3.5" />
+                                <span>{new Date(match.scheduledDate!).toLocaleDateString()}</span>
+                              </div>
+                              {match.scheduledTime && (
+                                <div className="flex items-center gap-1.5">
+                                  <Clock className="h-3.5 w-3.5" />
+                                  <span>{match.scheduledTime}</span>
+                                </div>
+                              )}
+                              {match.venue && (
+                                <div className="flex items-center gap-1.5">
+                                  <MapPin className="h-3.5 w-3.5" />
+                                  <span>{match.venue}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
                           <Button
-                            variant="outline"
+                            variant={isScheduled ? 'outline' : 'default'}
                             size="sm"
-                            onClick={() => {
-                              setSelectedMatch(match.id);
-                              setScheduleDate(displayDate);
-                              setScheduleTime(match.scheduledTime || '');
-                              setVenue(match.venue || '');
-                            }}
+                            onClick={() => openScheduleDialog(match)}
                             data-testid={`button-schedule-${match.id}`}
+                            className="gap-1.5"
                           >
-                            <Edit className="h-4 w-4 mr-2" />
-                            {match.status === 'Scheduled' ? 'Edit' : 'Schedule'}
+                            <Edit className="h-3.5 w-3.5" />
+                            {isScheduled ? 'Edit Schedule' : 'Schedule Match'}
                           </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Schedule Match</DialogTitle>
-                            <DialogDescription>Set the date, time, and venue for this match</DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4 pt-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="date">Date</Label>
-                              <Input
-                                id="date"
-                                type="date"
-                                value={scheduleDate}
-                                onChange={(e) => setScheduleDate(e.target.value)}
-                                data-testid="input-schedule-date"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="time">Time</Label>
-                              <Input
-                                id="time"
-                                type="time"
-                                value={scheduleTime}
-                                onChange={(e) => setScheduleTime(e.target.value)}
-                                data-testid="input-schedule-time"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="venue">Venue</Label>
-                              <Input
-                                id="venue"
-                                placeholder="e.g., Court A"
-                                value={venue}
-                                onChange={(e) => setVenue(e.target.value)}
-                                data-testid="input-venue"
-                              />
-                            </div>
-                            <Button onClick={handleSchedule} className="w-full" data-testid="button-save-schedule">
-                              Save Schedule
-                            </Button>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
 
-              {pendingAndScheduledMatches.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">No matches available for scheduling</div>
-              )}
-            </div>
+                {activeMatches.length === 0 && (
+                  <div className="text-center py-16 text-muted-foreground space-y-2">
+                    <Calendar className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                    <p className="font-medium">No matches currently available for scheduling</p>
+                    <p className="text-xs">Generate fixtures first from the Fixtures tab.</p>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        {/* Controlled Schedule Modal */}
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                {activeMatch?.scheduledDate ? 'Edit Match Schedule' : 'Schedule Match'}
+              </DialogTitle>
+              <DialogDescription>
+                {activeMatch && (
+                  <span>
+                    Match #{activeMatch.numericId} ({activeMatch.round})
+                  </span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            {activeMatch && (
+              <div className="space-y-4 pt-2">
+                <div className="p-3 bg-muted/60 rounded-lg text-xs space-y-1">
+                  <div className="font-semibold text-foreground">
+                    {getParticipantDisplay(activeMatch.player1Id, registrations).display}
+                  </div>
+                  <div className="text-muted-foreground">vs</div>
+                  <div className="font-semibold text-foreground">
+                    {getParticipantDisplay(activeMatch.player2Id, registrations).display}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="schedule-date" className="text-xs font-semibold">Match Date</Label>
+                  <Input
+                    id="schedule-date"
+                    type="date"
+                    value={scheduleDate}
+                    onChange={(e) => setScheduleDate(e.target.value)}
+                    data-testid="input-schedule-date"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="schedule-time" className="text-xs font-semibold">Match Time</Label>
+                  <Input
+                    id="schedule-time"
+                    type="time"
+                    value={scheduleTime}
+                    onChange={(e) => setScheduleTime(e.target.value)}
+                    data-testid="input-schedule-time"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="schedule-venue" className="text-xs font-semibold">Venue / Court</Label>
+                  <Input
+                    id="schedule-venue"
+                    placeholder="e.g., Court 1, Main Table, Indoor Hall"
+                    value={venue}
+                    onChange={(e) => setVenue(e.target.value)}
+                    data-testid="input-venue"
+                  />
+                </div>
+
+                <div className="pt-2 flex gap-2">
+                  <Button
+                    onClick={handleSaveSchedule}
+                    className="flex-1"
+                    disabled={saving || !scheduleDate || !scheduleTime || !venue.trim()}
+                    data-testid="button-save-schedule"
+                  >
+                    {saving ? 'Saving to Database…' : 'Save Schedule'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsDialogOpen(false)}
+                    disabled={saving}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );
 }
-

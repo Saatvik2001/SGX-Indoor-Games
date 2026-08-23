@@ -9,7 +9,7 @@ const router = Router();
 // GET /api/tournaments
 router.get('/', async (_req, res) => {
   try {
-    if (!db) {
+    if (!db || !pool) {
       const rows = await fallbackStore.getTournaments();
       return res.json(rows);
     }
@@ -24,14 +24,14 @@ router.get('/', async (_req, res) => {
 // POST /api/tournaments
 router.post('/', async (req, res) => {
   try {
-    if (!db) {
+    if (!db || !pool) {
       await fallbackStore.addTournament(req.body);
       return res.status(201).json({ ok: true });
     }
     const b = req.body;
     await pool.query(
       `INSERT INTO tournaments(id, name, description, location, registration_start_date, registration_end_date, tournament_start_date, tournament_end_date, status)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO UPDATE SET name = $2, description = $3, location = $4, status = $9 RETURNING *`,
       [
         b.id,
         b.name,
@@ -54,24 +54,29 @@ router.post('/', async (req, res) => {
 // PUT /api/tournaments/:id
 router.put('/:id', async (req, res) => {
   try {
-    if (!db) {
-      return res.status(503).json({ error: 'database_unavailable' });
-    }
     const id = req.params.id;
     const b = req.body;
-    await pool.query(
-      `UPDATE tournaments SET name=$1, description=$2, location=$3, registration_start_date=$4, registration_end_date=$5, tournament_start_date=$6, tournament_end_date=$7, status=$8 WHERE id = $9`,
-      [
-        b.name,
-        b.description,
-        b.location,
-        b.registrationStartDate ? new Date(b.registrationStartDate) : undefined,
-        b.registrationEndDate ? new Date(b.registrationEndDate) : undefined,
-        b.tournamentStartDate ? new Date(b.tournamentStartDate) : undefined,
-        b.tournamentEndDate ? new Date(b.tournamentEndDate) : undefined,
-        b.status,
-        id
-      ]
+    await withDatabaseFallback(
+      async () => {
+        if (!pool) throw new Error('no_pool');
+        await pool.query(
+          `UPDATE tournaments SET name=$1, description=$2, location=$3, registration_start_date=$4, registration_end_date=$5, tournament_start_date=$6, tournament_end_date=$7, status=$8 WHERE id = $9`,
+          [
+            b.name,
+            b.description,
+            b.location,
+            b.registrationStartDate ? new Date(b.registrationStartDate) : undefined,
+            b.registrationEndDate ? new Date(b.registrationEndDate) : undefined,
+            b.tournamentStartDate ? new Date(b.tournamentStartDate) : undefined,
+            b.tournamentEndDate ? new Date(b.tournamentEndDate) : undefined,
+            b.status,
+            id
+          ]
+        );
+      },
+      async () => {
+        await fallbackStore.updateTournament(id, b);
+      }
     );
     return res.json({ ok: true });
   } catch (err) {
@@ -83,24 +88,28 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/tournaments/:id
 router.delete('/:id', async (req, res) => {
   try {
-    if (!db) {
-      await fallbackStore.deleteTournament(req.params.id);
-      return res.json({ ok: true });
+    const id = req.params.id;
+
+    if (pool) {
+      // 1. Cascade delete all matches for events in this tournament
+      await pool.query('DELETE FROM matches WHERE event_id IN (SELECT id FROM events WHERE tournament_id = $1)', [id]);
+
+      // 2. Cascade delete all registrations for this tournament or its events
+      await pool.query('DELETE FROM registrations WHERE tournament_id = $1 OR event_id IN (SELECT id FROM events WHERE tournament_id = $1)', [id]);
+
+      // 3. Cascade delete all events for this tournament
+      await pool.query('DELETE FROM events WHERE tournament_id = $1', [id]);
+
+      // 4. Delete the tournament itself
+      await pool.query('DELETE FROM tournaments WHERE id = $1', [id]);
+    } else {
+      await fallbackStore.deleteTournament(id);
     }
 
-    const deleted = await withDatabaseFallback(async () => {
-      const id = req.params.id;
-      await pool.query('DELETE FROM tournaments WHERE id = $1', [id]);
-      return true;
-    }, async () => {
-      await fallbackStore.deleteTournament(req.params.id);
-      return true;
-    });
-
-    return res.json({ ok: true, deleted });
-  } catch (err) {
-    logger.error({ err }, 'Error deleting tournament');
-    return res.status(500).json({ error: 'internal' });
+    return res.json({ ok: true, deletedTournamentId: id });
+  } catch (err: any) {
+    logger.error({ err }, 'Error deleting tournament with cascade');
+    return res.status(500).json({ error: err?.message || 'internal' });
   }
 });
 

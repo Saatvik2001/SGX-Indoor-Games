@@ -29,12 +29,13 @@ router.post("/", async (req, res) => {
       return res.status(201).json({ ok: true, insertedCount: inserted.length, inserted });
     }
 
+    const p = pool;
     const inserted = await withDatabaseFallback(async () => {
-      await pool.query("ALTER TABLE registrations ADD COLUMN IF NOT EXISTS department varchar(128)");
+      await p.query("ALTER TABLE registrations ADD COLUMN IF NOT EXISTS department varchar(128)");
 
       const insertedRows = [];
       for (const r of registrations) {
-        const insertRes = await pool.query(
+        const insertRes = await p.query(
           `INSERT INTO registrations(employee_id, provided_employee_id, employee_name, department, tournament_id, event_id, partner_id, location, registration_date)
            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
           [r.employeeId, r.providedEmployeeId, r.employeeName, r.department || null, r.tournamentId, r.eventId, r.partnerId || null, r.location, new Date(r.registrationDate)]
@@ -45,20 +46,20 @@ router.post("/", async (req, res) => {
           let isDoubles = false;
           if (r.eventType === 'Doubles') isDoubles = true;
           else {
-            const evRes = await pool.query('SELECT type FROM events WHERE id = $1 LIMIT 1', [r.eventId]);
+            const evRes = await p.query('SELECT type FROM events WHERE id = $1 LIMIT 1', [r.eventId]);
             const ev = evRes.rows[0];
             if (ev?.type === 'Doubles') isDoubles = true;
           }
           if (isDoubles && !r.partnerId) {
             const newReg = row;
-            const otherRes = await pool.query(
+            const otherRes = await p.query(
               'SELECT * FROM registrations WHERE event_id = $1 AND location = $2 AND partner_id IS NULL AND id <> $3 ORDER BY registration_date ASC LIMIT 1',
               [r.eventId, r.location, newReg.id]
             );
             const other = otherRes.rows[0];
             if (other) {
-              await pool.query('UPDATE registrations SET partner_id = $1 WHERE id = $2', [other.employee_id, newReg.id]);
-              await pool.query('UPDATE registrations SET partner_id = $1 WHERE id = $2', [newReg.employee_id, other.id]);
+              await p.query('UPDATE registrations SET partner_id = $1 WHERE id = $2', [other.employee_id, newReg.id]);
+              await p.query('UPDATE registrations SET partner_id = $1 WHERE id = $2', [newReg.employee_id, other.id]);
               const idx = insertedRows.findIndex(x => x.id === newReg.id);
               if (idx >= 0) insertedRows[idx].partner_id = other.employee_id;
             }

@@ -2,231 +2,191 @@
   "registrations": [
     {
       "id": 1,
-      "employee_id": "U1",
-      "provided_employee_id": "U1",
-      "employee_name": "Alice",
-      "department": null,
-      "tournament_id": "T001",
-      "event_id": "E001",
+      "employee_id": "SG101",
+      "provided_employee_id": "SG101",
+      "employee_name": "Abc",
+      "department": "WAT",
+      "tournament_id": "T-mt5erg5o",
+      "event_id": "EV-mt5etm5q",
       "partner_id": null,
-      "location": "Hyderabad",
-      "registration_date": "2026-08-02T22:26:50.233Z"
+      "location": "Irrum Manzil",
+      "registration_date": "2026-08-23T06:13:37.437Z"
     },
     {
       "id": 2,
-      "employee_id": "U2",
-      "provided_employee_id": "U2",
-      "employee_name": "Bob",
-      "department": null,
-      "tournament_id": "T001",
-      "event_id": "E001",
-      "partner_id": null,
-      "location": "Hyderabad",
-      "registration_date": "2026-08-02T22:26:50.234Z"
+      "employee_id": "SG101",
+      "provided_employee_id": "SG101",
+      "employee_name": "Abc",
+      "department": "WAT",
+      "tournament_id": "T-mt5erg5o",
+      "event_id": "EV-mt5eu0da",
+      "partner_id": "SG102",
+      "location": "Irrum Manzil",
+      "registration_date": "2026-08-23T06:13:37.437Z"
     },
     {
       "id": 3,
-      "employee_id": "U3",
-      "provided_employee_id": "U3",
-      "employee_name": "Carol",
-      "department": null,
-      "tournament_id": "T001",
-      "event_id": "E001",
-      "partner_id": null,
-      "location": "Bangalore",
-      "registration_date": "2026-08-02T22:26:50.234Z"
+      "employee_id": "SG102",
+      "provided_employee_id": "SG102",
+      "employee_name": "DEF",
+      "department": "WAT",
+      "tournament_id": "T-mt5erg5o",
+      "event_id": "EV-mt5eu0da",
+      "partner_id": "SG101",
+      "location": "Irrum Manzil",
+      "registration_date": "2026-08-23T06:13:52.722Z"
     },
     {
       "id": 4,
-      "employee_id": "U4",
-      "provided_employee_id": "U4",
-      "employee_name": "Dave",
-      "department": null,
-      "tournament_id": "T001",
-      "event_id": "E001",
+      "employee_id": "SG103",
+      "provided_employee_id": "SG103",
+      "employee_name": "GHI",
+      "department": "WAT",
+      "tournament_id": "T-mt5erg5o",
+      "event_id": "EV-mt5etm5q",
       "partner_id": null,
-      "location": "Bangalore",
-      "registration_date": "2026-08-02T22:26:50.234Z"
-    },
-    {
-      "id": 5,
-      "employee_id": "U1",
-      "provided_employee_id": "U1",
-      "employee_name": "Alice",
-      "department": null,
-      "tournament_id": "T001",
-      "event_id": "E001",
-      "partner_id": null,
-      "location": "Hyderabad",
-      "registration_date": "2026-08-02T22:28:45.372Z"
-    },
-    {
-      "id": 6,
-      "employee_id": "U2",
-      "provided_employee_id": "U2",
-      "employee_name": "Bob",
-      "department": null,
-      "tournament_id": "T001",
-      "event_id": "E001",
-      "partner_id": null,
-      "location": "Hyderabad",
-      "registration_date": "2026-08-02T22:28:45.375Z"
-    },
-    {
-      "id": 7,
-      "employee_id": "U3",
-      "provided_employee_id": "U3",
-      "employee_name": "Carol",
-      "department": null,
-      "tournament_id": "T001",
-      "event_id": "E001",
-      "partner_id": null,
-      "location": "Bangalore",
-      "registration_date": "2026-08-02T22:28:45.375Z"
-    },
-    {
-      "id": 8,
-      "employee_id": "U4",
-      "provided_employee_id": "U4",
-      "employee_name": "Dave",
-      "department": null,
-      "tournament_id": "T001",
-      "event_id": "E001",
-      "partner_id": null,
-      "location": "Bangalore",
-      "registration_date": "2026-08-02T22:28:45.375Z"
+      "location": "Irrum Manzil",
+      "registration_date": "2026-08-23T06:14:06.207Z"
     }
   ],
   "matches": [
     {
-      "id": 1,
+      "id": 54,
       "event_id": "E001",
       "round": "Round 1",
-      "player1_id": "U1",
-      "player2_id": "U2",
-      "winner_id": "U1",
+      "player1_id": "gh3",
+      "player2_id": "ghj",
+      "winner_id": "gh3",
       "status": "Completed",
       "scheduled_date": null,
       "meta": {
         "location": "Hyderabad",
         "bracket_index": 0,
-        "winner_name": "Alice",
+        "round_level": 0,
+        "is_bye": false,
+        "disqualified_player_ids": [
+          "ghj"
+        ],
+        "winner_name": "gh3",
         "winner_location": "Hyderabad"
       }
     },
     {
-      "id": 2,
+      "id": 55,
       "event_id": "E001",
-      "round": "Quarter Final",
-      "player1_id": "U1",
-      "player2_id": null,
-      "winner_id": null,
-      "status": "Scheduled",
-      "scheduled_date": "2026-08-02T22:28:45.376Z",
+      "round": "Round 1",
+      "player1_id": "234",
+      "player2_id": "gh5",
+      "winner_id": "234",
+      "status": "Completed",
+      "scheduled_date": null,
+      "meta": {
+        "location": "Hyderabad",
+        "bracket_index": 1,
+        "round_level": 0,
+        "is_bye": false,
+        "disqualified_player_ids": [
+          "gh5"
+        ],
+        "winner_name": "gh2",
+        "winner_location": "Hyderabad"
+      }
+    },
+    {
+      "id": 56,
+      "event_id": "E001",
+      "round": "Final",
+      "player1_id": "gh3",
+      "player2_id": "234",
+      "winner_id": "gh3",
+      "status": "Completed",
+      "scheduled_date": null,
       "meta": {
         "location": "Hyderabad",
         "bracket_index": 0,
-        "scheduled_time": "10:00",
-        "venue": "Court A"
+        "round_level": 1,
+        "is_bye": null,
+        "disqualified_player_ids": [
+          "234"
+        ],
+        "winner_name": "gh3",
+        "winner_location": "Hyderabad"
       }
     },
     {
-      "id": 3,
-      "event_id": "E001",
-      "round": "Semi Final",
-      "player1_id": "",
-      "player2_id": null,
-      "winner_id": null,
-      "status": "Pending",
-      "scheduled_date": null,
-      "meta": {
-        "location": "Hyderabad",
-        "bracket_index": 0
-      }
-    },
-    {
-      "id": 4,
-      "event_id": "E001",
+      "id": 57,
+      "event_id": "EV-mt5etm5q",
       "round": "Final",
-      "player1_id": "",
-      "player2_id": null,
+      "player1_id": "SG101",
+      "player2_id": "SG103",
       "winner_id": null,
       "status": "Pending",
       "scheduled_date": null,
       "meta": {
+        "format": "Single Elimination",
         "location": "Hyderabad",
-        "bracket_index": 0
+        "bracket_index": 0,
+        "round_level": 0,
+        "half": "Upper Half",
+        "is_bye": false,
+        "bye_player": null
       }
     },
     {
-      "id": 5,
-      "event_id": "E001",
-      "round": "Round 1",
-      "player1_id": "U3",
-      "player2_id": "U4",
-      "winner_id": null,
-      "status": "Pending",
-      "scheduled_date": null,
-      "meta": {
-        "location": "Bangalore",
-        "bracket_index": 0
-      }
-    },
-    {
-      "id": 6,
-      "event_id": "E001",
-      "round": "Quarter Final",
-      "player1_id": "",
-      "player2_id": null,
-      "winner_id": null,
-      "status": "Pending",
-      "scheduled_date": null,
-      "meta": {
-        "location": "Bangalore",
-        "bracket_index": 0
-      }
-    },
-    {
-      "id": 7,
-      "event_id": "E001",
-      "round": "Semi Final",
-      "player1_id": "",
-      "player2_id": null,
-      "winner_id": null,
-      "status": "Pending",
-      "scheduled_date": null,
-      "meta": {
-        "location": "Bangalore",
-        "bracket_index": 0
-      }
-    },
-    {
-      "id": 8,
-      "event_id": "E001",
+      "id": 58,
+      "event_id": "EV-mt5eu0da",
       "round": "Final",
-      "player1_id": "",
-      "player2_id": null,
+      "player1_id": "SG101",
+      "player2_id": "SG102",
       "winner_id": null,
       "status": "Pending",
       "scheduled_date": null,
       "meta": {
-        "location": "Bangalore",
-        "bracket_index": 0
+        "format": "Single Elimination",
+        "location": "Hyderabad",
+        "bracket_index": 0,
+        "round_level": 0,
+        "half": "Upper Half",
+        "is_bye": false,
+        "bye_player": null
       }
     }
   ],
-  "events": [],
+  "events": [
+    {
+      "id": "EV-mt5etm5q",
+      "tournament_id": "T-mt5erg5o",
+      "name": "TT Singles",
+      "type": "Singles",
+      "game": "TT",
+      "meta": {
+        "location": "Irrum Manzil",
+        "format": "Single Elimination"
+      }
+    },
+    {
+      "id": "EV-mt5eu0da",
+      "tournament_id": "T-mt5erg5o",
+      "name": "TT Doubles",
+      "type": "Doubles",
+      "game": "TT",
+      "meta": {
+        "location": "Irrum Manzil",
+        "format": "Single Elimination"
+      }
+    }
+  ],
   "tournaments": [
     {
-      "id": "t-delete-test",
-      "name": "Delete Test Tournament",
-      "description": "For delete tests",
-      "location": "Hyderabad",
-      "registration_start_date": "2026-08-01T00:00:00.000Z",
-      "registration_end_date": "2026-08-10T00:00:00.000Z",
-      "tournament_start_date": "2026-08-12T00:00:00.000Z",
-      "tournament_end_date": "2026-08-14T00:00:00.000Z",
-      "status": "Draft"
+      "id": "T-mt5erg5o",
+      "name": "Solugenix Annual Championship 2026",
+      "description": "Annual corporate championship featuring Table Tennis, Badminton, Chess, and Carrom.",
+      "location": "Irrum Manzil & Hitech City",
+      "registration_start_date": "2026-08-23T00:00:00.000Z",
+      "registration_end_date": "2026-08-27T00:00:00.000Z",
+      "tournament_start_date": "2026-08-31T00:00:00.000Z",
+      "tournament_end_date": "2026-09-03T00:00:00.000Z",
+      "status": "In Progress"
     }
   ]
 }

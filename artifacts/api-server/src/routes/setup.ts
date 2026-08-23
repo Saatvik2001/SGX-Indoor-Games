@@ -32,11 +32,14 @@ router.post('/createTables', async (_req, res) => {
   `;
 
   try {
+    if (!pool) {
+      return res.status(503).json({ error: 'database_unavailable' });
+    }
     await pool.query(sql);
-    res.json({ ok: true });
+    return res.json({ ok: true });
   } catch (err) {
     logger.error({ err }, 'Error creating tables via setup');
-    res.status(500).json({ error: 'internal' });
+    return res.status(500).json({ error: 'internal' });
   }
 });
 

@@ -1,79 +1,135 @@
 import { Router } from "express";
 import { logger } from "../lib/logger";
 import { db, pool } from "@workspace/db";
-import { fallbackStore } from "../lib/fallback-store";
+import { fallbackStore, buildBracketDraftMatches } from "../lib/fallback-store";
+import { getTournamentSummary } from "../lib/fixture-engine";
 import { withDatabaseFallback } from "../lib/db-fallback";
+import sse from "../lib/sse";
 
 const router = Router();
+
+// GET /api/fixtures/summary/:eventId
+router.get("/summary/:eventId", async (req, res) => {
+  try {
+    const { eventId } = req.params as { eventId: string };
+    if (!eventId) return res.status(400).json({ error: "eventId_required" });
+
+    let count = 0;
+    let format: 'Single Elimination' | 'Round Robin' | 'Double Elimination' = 'Single Elimination';
+
+    if (pool) {
+      const regRes = await pool.query('SELECT COUNT(DISTINCT employee_id) as count FROM registrations WHERE event_id = $1', [eventId]);
+      count = Number(regRes.rows[0]?.count || 0);
+
+      // Check format from existing matches first
+      const matchRes = await pool.query('SELECT meta FROM matches WHERE event_id = $1 LIMIT 1', [eventId]);
+      if (matchRes.rows.length > 0) {
+        const mMeta = typeof matchRes.rows[0].meta === 'string' ? JSON.parse(matchRes.rows[0].meta || '{}') : (matchRes.rows[0].meta || {});
+        if (mMeta.format) format = mMeta.format;
+      } else {
+        const evRes = await pool.query('SELECT meta FROM events WHERE id = $1', [eventId]);
+        const evMeta = evRes.rows[0]?.meta;
+        const parsedMeta = typeof evMeta === 'string' ? JSON.parse(evMeta || '{}') : (evMeta || {});
+        if (parsedMeta.format) format = parsedMeta.format;
+      }
+    } else {
+      const regs = await fallbackStore.getRegistrations(eventId);
+      const unique = new Set(regs.map(r => r.employee_id));
+      count = unique.size;
+
+      const matches = await fallbackStore.getMatches(eventId);
+      if (matches.length > 0 && matches[0].meta?.format) {
+        format = matches[0].meta.format as any;
+      }
+    }
+
+    const summary = getTournamentSummary(count, format);
+    return res.json(summary);
+  } catch (err) {
+    logger.error({ err }, "Error fetching fixture summary");
+    return res.status(500).json({ error: "internal" });
+  }
+});
 
 // POST /api/fixtures/generate
 router.post("/generate", async (req, res) => {
   try {
-    const { eventId, perLocationPlayerIds } = req.body as { eventId: string; perLocationPlayerIds: Record<string, string[]> };
+    const { eventId, perLocationPlayerIds, format: reqFormat } = req.body as {
+      eventId: string;
+      perLocationPlayerIds?: Record<string, string[]>;
+      format?: 'Single Elimination' | 'Round Robin' | 'Double Elimination';
+    };
+
+    if (!eventId) {
+      return res.status(400).json({ error: "eventId_required" });
+    }
+
+    let format = reqFormat || 'Single Elimination';
+
+    let locationMap = perLocationPlayerIds;
+    if (!locationMap || Object.keys(locationMap).length === 0) {
+      locationMap = {};
+      if (pool) {
+        const regRes = await pool.query('SELECT employee_id, location FROM registrations WHERE event_id = $1 ORDER BY id ASC', [eventId]);
+        for (const row of regRes.rows) {
+          const loc = row.location || 'All';
+          locationMap[loc] = locationMap[loc] || [];
+          locationMap[loc].push(row.employee_id);
+        }
+        if (!reqFormat) {
+          const evRes = await pool.query('SELECT meta FROM events WHERE id = $1', [eventId]);
+          const evMeta = evRes.rows[0]?.meta;
+          const parsedMeta = typeof evMeta === 'string' ? JSON.parse(evMeta || '{}') : (evMeta || {});
+          if (parsedMeta.format) format = parsedMeta.format;
+        }
+      } else {
+        const regRows = await fallbackStore.getRegistrations(eventId);
+        for (const row of regRows) {
+          const loc = row.location || 'All';
+          locationMap[loc] = locationMap[loc] || [];
+          locationMap[loc].push(row.employee_id);
+        }
+      }
+    }
+
     if (!pool) {
-      const matches = await fallbackStore.generateFixtures(eventId, perLocationPlayerIds || {});
+      const matches = await fallbackStore.generateFixtures(eventId, locationMap || {}, format);
       return res.status(201).json({ ok: true, matches });
     }
-    logger.info({ eventId, perLocationPlayerIds }, "Generate fixtures request");
+    const p = pool;
+    logger.info({ eventId, locationMap, format }, "Generate fixtures request");
 
     const generated = await withDatabaseFallback(async () => {
-      await pool.query('DELETE FROM matches WHERE event_id = $1', [eventId]);
+      await p.query('DELETE FROM matches WHERE event_id = $1', [eventId]);
+
+      // Update event meta to record chosen format
+      try {
+        const evRes = await p.query('SELECT meta FROM events WHERE id = $1', [eventId]);
+        let meta = evRes.rows[0]?.meta || {};
+        if (typeof meta === 'string') meta = JSON.parse(meta);
+        meta = { ...meta, format };
+        await p.query('UPDATE events SET meta = $1 WHERE id = $2', [JSON.stringify(meta), eventId]);
+      } catch {}
 
       const generatedMatches: any[] = [];
-
-      const createRoundMatches = async (roundName: string, playerIds: Array<string | null>, location: string, roundLevel: number) => {
-        const insertedRound: any[] = [];
-        for (let i = 0; i < playerIds.length; i += 2) {
-          const p1 = playerIds[i] ?? '';
-          const p2 = playerIds[i + 1] ?? null;
-          const result = await pool.query(
+      for (const [location, players] of Object.entries(locationMap || {})) {
+        const locationMatches = buildBracketDraftMatches(eventId, location, players, format);
+        for (const match of locationMatches) {
+          const result = await p.query(
             'INSERT INTO matches(event_id, round, player1_id, player2_id, winner_id, status, scheduled_date, meta) VALUES($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-            [eventId, roundName, p1, p2, null, 'Pending', null, JSON.stringify({ location, bracket_index: Math.floor(i / 2), round_level: roundLevel })]
+            [eventId, match.round, match.player1_id, match.player2_id, match.winner_id, match.status, null, JSON.stringify(match.meta)]
           );
-          insertedRound.push(result.rows[0]);
-        }
-        return insertedRound;
-      };
-
-      for (const [location, players] of Object.entries(perLocationPlayerIds || {})) {
-        const round1Players = players.filter(Boolean) as string[];
-        // compute match counts per round dynamically
-        const roundsCounts: number[] = [];
-        let matchesCount = Math.ceil(round1Players.length / 2);
-        roundsCounts.push(matchesCount);
-        while (matchesCount > 1) {
-          matchesCount = Math.ceil(matchesCount / 2);
-          roundsCounts.push(matchesCount);
-        }
-
-        const totalRounds = roundsCounts.length;
-        const roundNames = roundsCounts.map((_, idx) => {
-          const roundIdx = idx;
-          const fromEnd = totalRounds - 1 - roundIdx;
-          if (fromEnd === 0) return 'Final';
-          if (fromEnd === 1) return 'Semi Final';
-          if (fromEnd === 2) return 'Quarter Final';
-          return `Round ${roundIdx + 1}`;
-        });
-
-        // create Round 1 matches with players
-        const round1Matches = await createRoundMatches(roundNames[0], round1Players, location, 0);
-        generatedMatches.push(...round1Matches);
-
-        // create placeholders for subsequent rounds
-        for (let r = 1; r < roundNames.length; r++) {
-          const placeholderPlayers = Array.from({ length: roundsCounts[r] }, () => null as string | null);
-          const nextRoundMatches = await createRoundMatches(roundNames[r], placeholderPlayers, location, r);
-          generatedMatches.push(...nextRoundMatches);
+          generatedMatches.push(result.rows[0]);
         }
       }
 
       return generatedMatches;
     }, async () => {
-      const matches = await fallbackStore.generateFixtures(eventId, perLocationPlayerIds || {});
+      const matches = await fallbackStore.generateFixtures(eventId, locationMap || {}, format);
       return matches;
     });
 
+    try { sse.emitEvent(eventId, 'fixtures:generate', { eventId, count: generated.length, format }); } catch (e) {}
     return res.status(201).json({ ok: true, matches: generated });
   } catch (err) {
     logger.error({ err }, "Error generating fixtures");
@@ -92,11 +148,9 @@ router.get('/stream/:eventId', (req, res) => {
   res.write('\n');
   const clientId = String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8);
   const client = { id: clientId, res };
-  // add
-  const sseModule = require('../lib/sse').default;
-  sseModule.addClient(eventId, client);
+  sse.addClient(eventId, client);
   req.on('close', () => {
-    sseModule.removeClient(eventId, clientId);
+    sse.removeClient(eventId, clientId);
   });
 });
 

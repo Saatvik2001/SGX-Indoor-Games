@@ -1,243 +1,239 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ClipboardCheck, Trophy } from 'lucide-react';
-import { getEventById } from '@/data/events';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ClipboardCheck, Trophy, CheckCircle2 } from 'lucide-react';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useToast } from '@/hooks/use-toast';
-import type { Registration } from '@/data/registrations';
+import {
+  fetchEvents,
+  fetchRegistrations,
+  fetchMatches,
+  getParticipantDisplay,
+  type AppEvent,
+  type AppRegistration,
+  type AppMatch
+} from '@/lib/api';
 
 export default function AdminResults() {
   const { toast } = useToast();
-  const [selectedMatch, setSelectedMatch] = useState<string | null>(null);
+  const [events, setEvents] = useState<AppEvent[]>([]);
+  const [matches, setMatches] = useState<AppMatch[]>([]);
+  const [registrations, setRegistrations] = useState<AppRegistration[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [locationFilter, setLocationFilter] = useState<'All' | 'Irrum Manzil' | 'Hitech City' | string>('All');
+
+  // Dialog State
+  const [selectedMatch, setSelectedMatch] = useState<AppMatch | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [winner, setWinner] = useState('');
   const [score, setScore] = useState('');
-  const [matchState, setMatchState] = useState<any[]>([]);
-  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [evs, regs, mat] = await Promise.all([
+        fetchEvents(),
+        fetchRegistrations(),
+        fetchMatches()
+      ]);
+      setEvents(evs);
+      setRegistrations(regs);
+      setMatches(mat);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let mounted = true;
-    const fetchMatches = async () => {
-      try {
-        const [matchesRes, regsRes] = await Promise.all([
-          fetch('/api/matches'),
-          fetch('/api/registrations')
-        ]);
-        if (!mounted) return;
-        if (matchesRes.ok) {
-          const rows = await matchesRes.json();
-          const mapped = rows.map((r: any) => ({
-            id: `M${r.id}`,
-            eventId: r.event_id,
-            round: r.round,
-            player1Id: r.player1_id,
-            player2Id: r.player2_id || undefined,
-            status: r.status,
-            scheduledDate: r.scheduled_date || undefined,
-            scheduledTime: r.meta?.scheduled_time || undefined,
-            venue: r.meta?.venue || undefined,
-            winnerId: r.winner_id || undefined,
-            score: r.meta?.score || undefined,
-            isBye: false
-          }));
-          setMatchState(mapped);
-        }
-        if (regsRes.ok) {
-          const rows = await regsRes.json();
-          setRegistrations(rows.map((r: any) => ({
-            id: String(r.id),
-            employeeId: r.employee_id,
-            employeeName: r.employee_name,
-            providedEmployeeId: r.provided_employee_id,
-            department: r.department,
-            tournamentId: r.tournament_id,
-            eventId: r.event_id,
-            partnerId: r.partner_id,
-            location: r.location,
-            registrationDate: r.registration_date,
-          })));
-        }
-      } catch (e) {
-        // ignore
-      }
-    };
-    fetchMatches();
+    loadData();
   }, []);
 
-  const completableMatches = matchState.filter(
-    m => m.status === "Scheduled" && m.player2Id && m.scheduledDate
-  );
+  const openResultDialog = (match: AppMatch) => {
+    setSelectedMatch(match);
+    setWinner(match.winnerId || match.player1Id || '');
+    setScore(match.score || '');
+    setIsDialogOpen(true);
+  };
+
+  const getMatchLocation = (m: AppMatch) => {
+    if (m.location) {
+      if (m.location === 'Hyderabad') return 'Irrum Manzil';
+      if (m.location === 'Bangalore') return 'Hitech City';
+      return m.location;
+    }
+    const ev = events.find(e => e.id === m.eventId);
+    if (ev?.meta?.location) {
+      const l = String(ev.meta.location);
+      if (l === 'Hyderabad') return 'Irrum Manzil';
+      if (l === 'Bangalore') return 'Hitech City';
+      return l;
+    }
+    if (ev?.name.includes('Hitech City') || ev?.name.includes('Bangalore')) return 'Hitech City';
+    if (ev?.name.includes('Irrum Manzil') || ev?.name.includes('Hyderabad')) return 'Irrum Manzil';
+    return 'Main Arena';
+  };
 
   const handleSubmitResult = async () => {
     if (!selectedMatch || !winner) return;
 
-    const numericId = selectedMatch.replace(/^M/, '');
+    setSubmitting(true);
     try {
-      const res = await fetch(`/api/matches/${numericId}`, {
+      const res = await fetch(`/api/matches/${selectedMatch.numericId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ winner_id: winner, score, status: 'Completed' })
+        body: JSON.stringify({
+          winner_id: winner,
+          score: score.trim() || undefined,
+          status: 'Completed'
+        })
       });
 
       if (!res.ok) {
-        toast({
-          title: 'Could not save result',
-          description: 'Server returned an error while saving the match result.'
-        });
+        toast({ title: 'Error', description: 'Failed to record match result.' });
         return;
       }
 
-      setMatchState(prev => prev.map(m => m.id === selectedMatch ? { ...m, winnerId: winner, score, status: 'Completed' } : m));
-      toast({
-        title: 'Result Recorded',
-        description: 'Match result has been successfully recorded.'
-      });
+      toast({ title: 'Result Recorded! 🏆', description: 'Match marked as completed and winner advanced.' });
+      setIsDialogOpen(false);
       setSelectedMatch(null);
       setWinner('');
       setScore('');
-    } catch (e) {
-      toast({
-        title: 'Could not save result',
-        description: 'Network error while saving the match result.'
-      });
+      await loadData();
+    } catch {
+      toast({ title: 'Error', description: 'Network error recording result.' });
+    } finally {
+      setSubmitting(false);
     }
   };
 
+  const playableMatches = useMemo(() => {
+    return matches.filter(m => {
+      const p1 = getParticipantDisplay(m.player1Id, registrations);
+      const p2 = getParticipantDisplay(m.player2Id, registrations);
+      const isPlayable = p1.hasPlayer && p2.hasPlayer && m.status !== 'Completed';
+      if (!isPlayable) return false;
+      if (locationFilter === 'All') return true;
+      const loc = getMatchLocation(m);
+      return loc === locationFilter || loc === 'Main Arena';
+    });
+  }, [matches, registrations, locationFilter, events]);
+
+  const completedMatches = useMemo(() => {
+    return matches
+      .filter(m => m.status === 'Completed')
+      .filter(m => {
+        if (locationFilter === 'All') return true;
+        const loc = getMatchLocation(m);
+        return loc === locationFilter || loc === 'Main Arena';
+      })
+      .slice()
+      .reverse();
+  }, [matches, locationFilter, events]);
+
   return (
     <AdminLayout>
-      <div className="p-6 space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Results Entry</h1>
-          <p className="text-muted-foreground">
-            Record match results and declare winners
-          </p>
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-black font-['Outfit'] tracking-tight">Results & Scores Entry</h1>
+            <p className="text-sm text-muted-foreground">
+              Record match results, official scores, and promote bracket winners
+            </p>
+          </div>
+
+          {/* Location Filter Pills */}
+          <div className="flex gap-2 p-1 bg-muted rounded-xl">
+            {['All', 'Irrum Manzil', 'Hitech City'].map(loc => (
+              <button
+                key={loc}
+                onClick={() => setLocationFilter(loc)}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  locationFilter === loc
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {loc === 'All' ? 'All Locations' : loc}
+              </button>
+            ))}
+          </div>
         </div>
 
+        {/* Ready to Enter Result */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ClipboardCheck className="h-5 w-5 text-primary" />
-              Scheduled Matches
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <ClipboardCheck className="h-5 w-5 text-primary" />
+                Matches Ready for Result Entry
+              </CardTitle>
+              <span className="text-sm text-muted-foreground">{playableMatches.length} Match(es)</span>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {completableMatches.map(match => {
-                const player1 = registrations.find(r => r.employeeId === match.player1Id);
-                const player2 = match.player2Id ? registrations.find(r => r.employeeId === match.player2Id) : null;
-                const event = getEventById(match.eventId);
+            {loading ? (
+              <div className="text-center py-8 text-muted-foreground">Loading matches…</div>
+            ) : playableMatches.length > 0 ? (
+              <div className="space-y-4">
+                {playableMatches.map(match => {
+                  const p1 = getParticipantDisplay(match.player1Id, registrations);
+                  const p2 = getParticipantDisplay(match.player2Id, registrations);
+                  const event = events.find(e => e.id === match.eventId);
 
-                return (
-                  <div
-                    key={match.id}
-                    className="border rounded-lg p-4 hover:shadow-md transition-shadow"
-                    data-testid={`match-${match.id}`}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-3">
-                          <StatusBadge status={match.status} />
-                          <span className="font-semibold text-sm">{match.round}</span>
-                          <span className="text-sm text-muted-foreground">• {event?.name}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2 text-sm">
-                          <span className="font-medium">{player1 ? `${player1.employeeName} (${player1.providedEmployeeId || player1.employeeId})` : 'TBD'}</span>
-                          <span className="text-muted-foreground">vs</span>
-                          <span className="font-medium">{player2 ? `${player2.employeeName} (${player2.providedEmployeeId || player2.employeeId})` : 'TBD'}</span>
-                        </div>
-
-                        <div className="text-sm text-muted-foreground">
-                          {new Date(match.scheduledDate!).toLocaleDateString()} • {match.scheduledTime} • {match.venue}
-                        </div>
-                      </div>
-
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setSelectedMatch(match.id);
-                              setWinner('');
-                              setScore('');
-                            }}
-                            data-testid={`button-enter-result-${match.id}`}
-                          >
-                            Enter Result
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Enter Match Result</DialogTitle>
-                            <DialogDescription>
-                              Select the winner and enter the score
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4 pt-4">
-                            <div className="p-4 bg-muted rounded-lg space-y-1">
-                              <p className="text-sm font-medium">{event?.name}</p>
-                              <p className="text-sm text-muted-foreground">
-                                {player1 ? `${player1.employeeName} (${player1.providedEmployeeId || player1.employeeId})` : 'TBD'} vs {player2 ? `${player2.employeeName} (${player2.providedEmployeeId || player2.employeeId})` : 'TBD'}
-                              </p>
-                              <p className="text-xs text-muted-foreground">{match.round}</p>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label>Select Winner</Label>
-                              <RadioGroup value={winner} onValueChange={setWinner}>
-                                <div className="flex items-center space-x-2 border rounded-lg p-3 hover:bg-muted/50 cursor-pointer">
-                                  <RadioGroupItem value={match.player1Id} id={`player1-${match.id}`} />
-                                  <Label htmlFor={`player1-${match.id}`} className="cursor-pointer flex-1">
-                                    {player1 ? `${player1.employeeName} (${player1.providedEmployeeId || player1.employeeId})` : 'TBD'}
-                                  </Label>
-                                </div>
-                                <div className="flex items-center space-x-2 border rounded-lg p-3 hover:bg-muted/50 cursor-pointer">
-                                  <RadioGroupItem value={match.player2Id!} id={`player2-${match.id}`} />
-                                  <Label htmlFor={`player2-${match.id}`} className="cursor-pointer flex-1">
-                                    {player2 ? `${player2.employeeName} (${player2.providedEmployeeId || player2.employeeId})` : 'TBD'}
-                                  </Label>
-                                </div>
-                              </RadioGroup>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label htmlFor="score">Score (Optional)</Label>
-                              <Input
-                                id="score"
-                                placeholder="e.g., 21-18, 21-15"
-                                value={score}
-                                onChange={(e) => setScore(e.target.value)}
-                                data-testid="input-score"
-                              />
-                            </div>
-
-                            <Button
-                              onClick={handleSubmitResult}
-                              className="w-full"
-                              disabled={!winner}
-                              data-testid="button-submit-result"
-                            >
-                              Submit Result
-                            </Button>
+                  return (
+                    <div
+                      key={match.id}
+                      className="border rounded-xl p-4 bg-card hover:shadow-md transition-shadow"
+                      data-testid={`match-${match.id}`}
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex items-center gap-3">
+                            <StatusBadge status={match.status} />
+                            <span className="font-bold text-sm">Match #{match.numericId} • {match.round}</span>
+                            {event && (
+                              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded font-medium">
+                                {event.name}
+                              </span>
+                            )}
                           </div>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
-                  </div>
-                );
-              })}
 
-              {completableMatches.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground">
-                  No scheduled matches available for result entry
-                </div>
-              )}
-            </div>
+                          <div className="flex items-center gap-2 text-sm font-semibold pt-1">
+                            <span>{p1.display}</span>
+                            <span className="text-xs text-muted-foreground font-normal">vs</span>
+                            <span>{p2.display}</span>
+                          </div>
+
+                          {match.scheduledDate && (
+                            <div className="text-xs text-muted-foreground pt-0.5">
+                              📅 {new Date(match.scheduledDate).toLocaleDateString()} {match.scheduledTime ? `• ⏰ ${match.scheduledTime}` : ''} {match.venue ? `• 📍 ${match.venue}` : ''}
+                            </div>
+                          )}
+                        </div>
+
+                        <Button
+                          size="sm"
+                          onClick={() => openResultDialog(match)}
+                          data-testid={`button-enter-result-${match.id}`}
+                        >
+                          Enter Result
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                No active matches ready for score entry. Matches with two assigned players will appear here.
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -246,41 +242,137 @@ export default function AdminResults() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-primary" />
-              Recent Results
+              Completed Match Results
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {matchState
-                .filter(m => m.status === "Completed")
-                .slice(-5)
-                .reverse()
-                .map(match => {
-                  const winner = match.winnerId ? registrations.find(r => r.employeeId === match.winnerId) : null;
-                  const event = getEventById(match.eventId);
+            {completedMatches.length > 0 ? (
+              <div className="space-y-3">
+                {completedMatches.map(match => {
+                  const winner = getParticipantDisplay(match.winnerId, registrations);
+                  const p1 = getParticipantDisplay(match.player1Id, registrations);
+                  const p2 = getParticipantDisplay(match.player2Id, registrations);
+                  const event = events.find(e => e.id === match.eventId);
+
                   return (
                     <div
                       key={match.id}
-                      className="flex items-center justify-between border-b pb-3 last:border-0"
+                      className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-3.5 last:border-0 gap-2"
                     >
-                      <div>
-                        <p className="font-medium text-sm">{winner ? `${winner.employeeName} (${winner.providedEmployeeId || winner.employeeId})` : 'TBD'}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {event?.name} • {match.round}
-                        </p>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-xs text-primary">{event?.name || match.eventId}</span>
+                          <span className="text-xs text-muted-foreground">• Match #{match.numericId} ({match.round})</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {p1.display} vs {p2.display}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300 font-bold">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span>Winner: {winner.display}</span>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <StatusBadge status={match.status} />
+
+                      <div className="flex items-center gap-3 self-end sm:self-center">
                         {match.score && (
-                          <p className="text-xs text-muted-foreground mt-1">{match.score}</p>
+                          <span className="text-xs bg-muted px-2.5 py-1 rounded font-mono font-bold">
+                            {match.score}
+                          </span>
                         )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs"
+                          onClick={() => openResultDialog(match)}
+                        >
+                          Edit
+                        </Button>
                       </div>
                     </div>
                   );
                 })}
-            </div>
+              </div>
+            ) : (
+              <div className="text-center py-12 text-muted-foreground">
+                No completed matches yet.
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        {/* Enter Result Modal */}
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Record Match Result</DialogTitle>
+              <DialogDescription>
+                {selectedMatch && (
+                  <span>Match #{selectedMatch.numericId} • {selectedMatch.round}</span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            {selectedMatch && (
+              <div className="space-y-4 pt-2">
+                <div className="p-3 bg-muted/60 rounded-lg text-xs space-y-1">
+                  <div className="font-semibold">
+                    {getParticipantDisplay(selectedMatch.player1Id, registrations).display}
+                  </div>
+                  <div className="text-muted-foreground">vs</div>
+                  <div className="font-semibold">
+                    {getParticipantDisplay(selectedMatch.player2Id, registrations).display}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-wide">Select Winner *</Label>
+                  <RadioGroup value={winner} onValueChange={setWinner} className="space-y-2">
+                    <div className="flex items-center space-x-2 border rounded-lg p-3 hover:bg-muted/50 cursor-pointer">
+                      <RadioGroupItem value={selectedMatch.player1Id} id={`r-p1-${selectedMatch.id}`} />
+                      <Label htmlFor={`r-p1-${selectedMatch.id}`} className="cursor-pointer flex-1 font-medium text-sm">
+                        {getParticipantDisplay(selectedMatch.player1Id, registrations).display}
+                      </Label>
+                    </div>
+
+                    {selectedMatch.player2Id && (
+                      <div className="flex items-center space-x-2 border rounded-lg p-3 hover:bg-muted/50 cursor-pointer">
+                        <RadioGroupItem value={selectedMatch.player2Id} id={`r-p2-${selectedMatch.id}`} />
+                        <Label htmlFor={`r-p2-${selectedMatch.id}`} className="cursor-pointer flex-1 font-medium text-sm">
+                          {getParticipantDisplay(selectedMatch.player2Id, registrations).display}
+                        </Label>
+                      </div>
+                    )}
+                  </RadioGroup>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="score-input" className="text-xs font-semibold">Match Score (Optional)</Label>
+                  <Input
+                    id="score-input"
+                    placeholder="e.g., 21-18, 21-15 or 3-1"
+                    value={score}
+                    onChange={(e) => setScore(e.target.value)}
+                    data-testid="input-score"
+                  />
+                </div>
+
+                <div className="pt-2 flex gap-2">
+                  <Button
+                    onClick={handleSubmitResult}
+                    className="flex-1"
+                    disabled={submitting || !winner}
+                    data-testid="button-submit-result"
+                  >
+                    {submitting ? 'Saving Result…' : 'Save Match Result'}
+                  </Button>
+                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );

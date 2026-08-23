@@ -1,11 +1,8 @@
 import { useMemo, useState, useEffect } from 'react';
-import { useLocation } from 'wouter';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { type Registration } from '@/data/registrations';
-import { getEventById, events } from '@/data/events';
 import { Users, Search } from 'lucide-react';
 import {
   useReactTable,
@@ -18,6 +15,12 @@ import {
   type ColumnDef,
 } from '@tanstack/react-table';
 import { Button } from '@/components/ui/button';
+import {
+  fetchEvents,
+  fetchRegistrations,
+  type AppEvent,
+  type AppRegistration
+} from '@/lib/api';
 
 type RegistrationRow = {
   providedEmployeeId: string;
@@ -26,7 +29,7 @@ type RegistrationRow = {
   department: string;
   location: string;
   eventName: string;
-  partner: string;
+  eventId: string;
   registrationDate: string;
 };
 
@@ -34,122 +37,92 @@ export default function Registrations() {
   const [globalFilter, setGlobalFilter] = useState('');
   const [eventFilter, setEventFilter] = useState('all');
   const [locationFilter, setLocationFilter] = useState('all');
+  const [eventsList, setEventsList] = useState<AppEvent[]>([]);
+  const [regs, setRegs] = useState<AppRegistration[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const [regs, setRegs] = useState<Registration[]>([]);
-  const [, setLocation] = useLocation();
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [eventsData, regsData] = await Promise.all([
+        fetchEvents(),
+        fetchRegistrations()
+      ]);
+      setEventsList(eventsData);
+      setRegs(regsData);
 
-  const query = useMemo(() => new URLSearchParams(typeof window !== 'undefined' ? window.location.search : ''), []);
+      // check URL query for preselected event
+      const query = new URLSearchParams(window.location.search);
+      const evParam = query.get('event');
+      if (evParam && eventsData.some(e => e.id === evParam)) {
+        setEventFilter(evParam);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let mounted = true;
-
-    const fetchRegs = async () => {
-      try {
-        const eventId = query.get('event');
-        const params = new URLSearchParams();
-        if (eventId) params.set('eventId', eventId);
-        const url = '/api/registrations' + (params.toString() ? `?${params.toString()}` : '');
-        const res = await fetch(url);
-        if (res.ok) {
-          const rows = await res.json();
-          if (mounted) setRegs(rows.map((r: any) => ({
-            id: String(r.id),
-            employeeId: r.employee_id,
-            providedEmployeeId: r.provided_employee_id,
-            employeeName: r.employee_name,
-            department: r.department || '',
-            location: r.location,
-            eventId: r.event_id,
-            partnerId: r.partner_id,
-            partnerName: r.partner_id ? 'Auto-paired' : '-',
-            registrationDate: r.registration_date,
-          })));
-          return;
-        }
-      } catch (err) {
-        if (mounted) setRegs([]);
-      }
-    };
-
-    fetchRegs();
-
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === 'registrations:update') {
-        fetchRegs();
-      }
-    };
-
-    window.addEventListener('storage', onStorage);
-    return () => { mounted = false; window.removeEventListener('storage', onStorage); };
+    loadData();
   }, []);
 
   const data = useMemo<RegistrationRow[]>(() => {
     return regs.map(reg => {
-      const event = getEventById(reg.eventId);
-
+      const event = eventsList.find(e => e.id === reg.eventId);
       return {
         id: reg.id,
-        providedEmployeeId: reg.providedEmployeeId || '-',
+        providedEmployeeId: reg.providedEmployeeId || reg.employeeId || '-',
         employeeName: reg.employeeName || 'Unknown',
-        department: reg.department || 'Unknown',
+        department: reg.department || 'General',
         location: reg.location || 'Unknown',
-        eventName: event?.name || 'Unknown',
-        partner: reg.partnerName || '-',
+        eventName: event?.name || reg.eventId || 'Unknown',
+        eventId: reg.eventId,
         registrationDate: new Date(reg.registrationDate).toLocaleDateString(),
       };
     });
-  }, [regs]);
+  }, [regs, eventsList]);
 
   const filteredData = useMemo(() => {
     let filtered = data;
-    
     if (eventFilter !== 'all') {
-      filtered = filtered.filter(row => {
-        const event = events.find(e => e.name === row.eventName);
-        return event?.id === eventFilter;
-      });
+      filtered = filtered.filter(row => row.eventId === eventFilter);
     }
-    
     if (locationFilter !== 'all') {
       filtered = filtered.filter(row => row.location === locationFilter);
     }
-    
     return filtered;
   }, [data, eventFilter, locationFilter]);
 
   const columnHelper = createColumnHelper<RegistrationRow>();
-  
+
   const columns = useMemo<ColumnDef<RegistrationRow, any>[]>(() => [
     columnHelper.accessor('providedEmployeeId', {
       header: 'Employee ID',
-      cell: info => <span className="font-mono text-sm">{info.getValue()}</span>,
+      cell: info => <span className="font-mono text-sm font-semibold">{info.getValue()}</span>,
     }),
     columnHelper.accessor('employeeName', {
-      header: 'Name',
+      header: 'Employee Name',
       cell: info => <span className="font-medium">{info.getValue()}</span>,
     }),
     columnHelper.accessor('department', {
       header: 'Department',
+      cell: info => <span className="text-muted-foreground">{info.getValue()}</span>,
     }),
     columnHelper.accessor('location', {
       header: 'Location',
       cell: info => (
-        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary">
           {info.getValue()}
         </span>
       ),
     }),
     columnHelper.accessor('eventName', {
       header: 'Event',
-      cell: info => <span className="text-sm">{info.getValue()}</span>,
-    }),
-    columnHelper.accessor('partner', {
-      header: 'Partner',
-      cell: info => <span className="text-sm text-muted-foreground">{info.getValue()}</span>,
+      cell: info => <span className="text-sm font-medium">{info.getValue()}</span>,
     }),
     columnHelper.accessor('registrationDate', {
       header: 'Registration Date',
-      cell: info => <span className="text-sm text-muted-foreground">{info.getValue()}</span>,
+      cell: info => <span className="text-xs text-muted-foreground font-mono">{info.getValue()}</span>,
     }),
   ], [columnHelper]);
 
@@ -175,9 +148,9 @@ export default function Registrations() {
     <AdminLayout>
       <div className="p-6 space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Registrations</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Registrations Management</h1>
           <p className="text-muted-foreground">
-            Manage and view all tournament registrations
+            View and search all participants registered in the tournament database
           </p>
         </div>
 
@@ -187,12 +160,15 @@ export default function Registrations() {
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-primary" />
-                  All Registrations
+                  All Participant Registrations
                 </CardTitle>
                 <CardDescription className="mt-1">
-                  {filteredData.length} total registrations
+                  {filteredData.length} participant(s) found
                 </CardDescription>
               </div>
+              <Button variant="outline" size="sm" onClick={loadData}>
+                Refresh
+              </Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -201,7 +177,7 @@ export default function Registrations() {
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search by name, ID, department..."
+                  placeholder="Search by participant name, ID, or department..."
                   value={globalFilter}
                   onChange={(e) => setGlobalFilter(e.target.value)}
                   className="pl-9"
@@ -209,30 +185,33 @@ export default function Registrations() {
                 />
               </div>
               <Select value={eventFilter} onValueChange={setEventFilter}>
-                <SelectTrigger className="w-full sm:w-48" data-testid="select-event-filter">
+                <SelectTrigger className="w-full sm:w-56" data-testid="select-event-filter">
                   <SelectValue placeholder="All Events" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Events</SelectItem>
-                  {events.map(event => (
-                    <SelectItem key={event.id} value={event.id}>{event.name}</SelectItem>
+                  <SelectItem value="all">All Events ({regs.length})</SelectItem>
+                  {eventsList.map(event => (
+                    <SelectItem key={event.id} value={event.id}>
+                      {event.name}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <Select value={locationFilter} onValueChange={setLocationFilter}>
-                <SelectTrigger className="w-full sm:w-48" data-testid="select-location-filter">
+                <SelectTrigger className="w-full sm:w-44" data-testid="select-location-filter">
                   <SelectValue placeholder="All Locations" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Locations</SelectItem>
-                  <SelectItem value="Hyderabad">Hyderabad</SelectItem>
-                  <SelectItem value="Bangalore">Bangalore</SelectItem>
+                  <SelectItem value="Irrum Manzil">Irrum Manzil</SelectItem>
+                  <SelectItem value="Hitech City">Hitech City</SelectItem>
+                  <SelectItem value="Other">Other</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {/* Table */}
-            <div className="rounded-lg border">
+            <div className="rounded-lg border overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-muted/50 border-b">
@@ -241,7 +220,7 @@ export default function Registrations() {
                         {headerGroup.headers.map(header => (
                           <th
                             key={header.id}
-                            className="text-left p-3 text-sm font-semibold text-muted-foreground cursor-pointer hover:bg-muted/70"
+                            className="text-left p-3 text-xs font-semibold uppercase text-muted-foreground cursor-pointer hover:bg-muted/70"
                             onClick={header.column.getToggleSortingHandler()}
                           >
                             {flexRender(header.column.columnDef.header, header.getContext())}
@@ -251,55 +230,71 @@ export default function Registrations() {
                     ))}
                   </thead>
                   <tbody>
-                    {table.getRowModel().rows.map(row => (
-                      <tr
-                        key={row.id}
-                        className="border-b last:border-0 hover:bg-muted/30 transition-colors"
-                        data-testid={`row-${row.original.id}`}
-                      >
-                        {row.getVisibleCells().map(cell => (
-                          <td key={cell.id} className="p-3 text-sm">
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        ))}
+                    {loading ? (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                          Loading registrations…
+                        </td>
                       </tr>
-                    ))}
+                    ) : table.getRowModel().rows.length > 0 ? (
+                      table.getRowModel().rows.map(row => (
+                        <tr
+                          key={row.id}
+                          className="border-b last:border-0 hover:bg-muted/30 transition-colors"
+                          data-testid={`row-${row.original.id}`}
+                        >
+                          {row.getVisibleCells().map(cell => (
+                            <td key={cell.id} className="p-3 text-sm">
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                          No registrations found matching the filters.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-muted-foreground">
-                Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
-                {Math.min(
-                  (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-                  filteredData.length
-                )}{' '}
-                of {filteredData.length} entries
+            {filteredData.length > 0 && (
+              <div className="flex items-center justify-between pt-2">
+                <div className="text-xs text-muted-foreground">
+                  Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
+                  {Math.min(
+                    (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+                    filteredData.length
+                  )}{' '}
+                  of {filteredData.length} entries
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => table.previousPage()}
+                    disabled={!table.getCanPreviousPage()}
+                    data-testid="button-previous-page"
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => table.nextPage()}
+                    disabled={!table.getCanNextPage()}
+                    data-testid="button-next-page"
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => table.previousPage()}
-                  disabled={!table.getCanPreviousPage()}
-                  data-testid="button-previous-page"
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => table.nextPage()}
-                  disabled={!table.getCanNextPage()}
-                  data-testid="button-next-page"
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       </div>

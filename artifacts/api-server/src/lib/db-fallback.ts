@@ -4,6 +4,8 @@ const DB_UNAVAILABLE_PATTERNS = [
   'ETIMEDOUT',
   'password authentication failed',
   'database_unavailable',
+  'no_pool',
+  'pool',
   'connection terminated',
   'connect ECONNREFUSED',
   'connect ENOTFOUND',

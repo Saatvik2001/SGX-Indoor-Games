@@ -1,219 +1,56 @@
-import { useEffect, useState } from 'react';
 import { PublicLayout } from '@/components/PublicLayout';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Link } from 'wouter';
-import { Trophy, Calendar, MapPin, Users, ArrowRight, Clock } from 'lucide-react';
-import { getActiveTournament } from '@/data/tournaments';
-import { events } from '@/data/events';
-import { motion } from 'framer-motion';
+import {
+  Calendar,
+  ArrowRight,
+  Sparkles
+} from 'lucide-react';
 
 export default function Landing() {
-  const tournament = getActiveTournament();
-  const [registrations, setRegistrations] = useState<any[]>([]);
-  const [matches, setMatches] = useState<any[]>([]);
-  const totalRegistrations = registrations.length;
-  const totalMatches = matches.length;
-  const completedMatches = matches.filter(m => m.status === 'Completed').length;
-
-  const container = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 }
-    }
-  };
-
-  const item = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0 }
-  };
-
-  useEffect(() => {
-    let mounted = true;
-    const loadStats = async () => {
-      try {
-        const [regsRes, matchesRes] = await Promise.all([
-          fetch('/api/registrations'),
-          fetch('/api/matches')
-        ]);
-        if (!mounted) return;
-        if (regsRes.ok) {
-          const rows = await regsRes.json();
-          setRegistrations(Array.isArray(rows) ? rows : []);
-        }
-        if (matchesRes.ok) {
-          const rows = await matchesRes.json();
-          setMatches(Array.isArray(rows) ? rows : []);
-        }
-      } catch {}
-    };
-    loadStats();
-    return () => { mounted = false; };
-  }, []);
-
   return (
     <PublicLayout>
-      <div className="min-h-[calc(100vh-4rem)]">
-        {/* Hero Section */}
-        <section className="relative py-20 px-4 bg-gradient-to-br from-primary/5 via-background to-primary/10">
-          <div className="container mx-auto max-w-6xl">
-            <motion.div 
-              className="text-center space-y-6"
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-            >
-              <div className="inline-flex items-center justify-center p-2 bg-primary/10 rounded-full">
-                <Trophy className="h-16 w-16 text-primary" />
-              </div>
-              <h1 className="text-5xl md:text-6xl font-bold tracking-tight">
-                {tournament?.name}
-              </h1>
-              <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                {tournament?.description}
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  <span>{tournament?.location}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-primary" />
-                  <span>{new Date(tournament?.tournamentStartDate || '').toLocaleDateString()} - {new Date(tournament?.tournamentEndDate || '').toLocaleDateString()}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-primary" />
-                  <span>{totalRegistrations} Registrations</span>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-4 justify-center pt-4">
-                <Link href="/register">
-                  <Button size="lg" className="gap-2" data-testid="button-register-now">
-                    Register Now <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-                <Link href="/fixtures">
-                  <Button size="lg" variant="outline" data-testid="button-view-fixtures">
-                    View Fixtures
-                  </Button>
-                </Link>
-              </div>
-            </motion.div>
-          </div>
-        </section>
+      {/* HERO SECTION */}
+      <section className="w-full flex-1 flex flex-col items-center justify-center relative overflow-hidden py-4 sm:py-6 px-4">
+        {/* Solugenix Dual-Color Glow Gradients */}
+        <div className="absolute top-1/4 left-1/3 -translate-x-1/2 -translate-y-1/2 w-96 md:w-[620px] h-96 md:h-[620px] bg-blue-600/20 rounded-full blur-3xl pointer-events-none -z-10" />
+        <div className="absolute top-1/3 right-1/4 translate-x-1/3 -translate-y-1/3 w-80 md:w-[500px] h-80 md:h-[500px] bg-sky-400/20 rounded-full blur-3xl pointer-events-none -z-10" />
 
-        {/* Stats Section */}
-        <section className="py-16 px-4 bg-card border-y border-border">
-          <div className="container mx-auto max-w-6xl">
-            <motion.div 
-              className="grid grid-cols-1 md:grid-cols-4 gap-6"
-              variants={container}
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true }}
-            >
-              <motion.div variants={item}>
-                <Card>
-                  <CardContent className="pt-6 text-center">
-                    <div className="text-4xl font-bold text-primary">{events.length}</div>
-                    <div className="text-sm text-muted-foreground mt-2">Events</div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-              <motion.div variants={item}>
-                <Card>
-                  <CardContent className="pt-6 text-center">
-                    <div className="text-4xl font-bold text-primary">{totalRegistrations}</div>
-                    <div className="text-sm text-muted-foreground mt-2">Participants</div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-              <motion.div variants={item}>
-                <Card>
-                  <CardContent className="pt-6 text-center">
-                    <div className="text-4xl font-bold text-primary">{completedMatches}</div>
-                    <div className="text-sm text-muted-foreground mt-2">Matches Completed</div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-              <motion.div variants={item}>
-                <Card>
-                  <CardContent className="pt-6 text-center">
-                    <div className="text-4xl font-bold text-primary">{totalMatches - completedMatches}</div>
-                    <div className="text-sm text-muted-foreground mt-2">Upcoming Matches</div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </motion.div>
-          </div>
-        </section>
-
-        {/* Events Section */}
-        <section className="py-16 px-4">
-          <div className="container mx-auto max-w-6xl">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold mb-4">Tournament Events</h2>
-              <p className="text-muted-foreground">Compete in your favorite indoor games</p>
+        <div className="container mx-auto max-w-5xl">
+          <div className="text-center space-y-4 sm:space-y-5 max-w-3xl mx-auto">
+            {/* Solugenix Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-blue-500/15 via-sky-500/15 to-blue-500/15 border border-sky-500/30 text-xs font-bold text-sky-700 dark:text-sky-300 tracking-wide shadow-xs backdrop-blur-sm">
+              <Sparkles className="h-3.5 w-3.5 text-sky-500 animate-pulse" />
+              <span>Innovative Technology. Intelligent Solutions.</span>
             </div>
-            <motion.div 
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-              variants={container}
-              initial="hidden"
-              whileInView="show"
-              viewport={{ once: true }}
-            >
-              {events.map((event) => {
-                const eventRegs = registrations.filter(r => r.eventId === event.id).length;
-                return (
-                  <motion.div key={event.id} variants={item}>
-                    <Card className="hover:shadow-lg transition-all hover:border-primary/50">
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          <Trophy className="h-5 w-5 text-primary" />
-                          {event.name}
-                        </CardTitle>
-                        <CardDescription>
-                          {event.type} • {event.game}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Users className="h-4 w-4" />
-                            <span>{eventRegs} registered</span>
-                          </div>
-                          <Link href={`/fixtures?event=${event.id}`}>
-                            <Button variant="ghost" size="sm" data-testid={`button-view-${event.id}`}>
-                              View Bracket
-                            </Button>
-                          </Link>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                );
-              })}
-            </motion.div>
-          </div>
-        </section>
 
-        {/* CTA Section */}
-        <section className="py-20 px-4 bg-gradient-to-br from-primary/10 to-primary/5">
-          <div className="container mx-auto max-w-4xl text-center space-y-6">
-            <Clock className="h-12 w-12 text-primary mx-auto" />
-            <h2 className="text-3xl font-bold">Ready to Compete?</h2>
-            <p className="text-muted-foreground text-lg">
-              Registration is open! Sign up now and showcase your skills.
+            {/* Main Heading */}
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black tracking-tight font-['Outfit'] leading-[1.1]">
+              Build Smarter. <br />
+              <span className="gradient-text-primary">Create What’s Next.</span>
+            </h1>
+
+            <p className="text-sm sm:text-base md:text-lg text-muted-foreground max-w-2xl mx-auto leading-relaxed font-normal">
+              Solugenix delivers innovative technology solutions that transform ideas into powerful digital products, intelligent solutions, and meaningful experiences.
             </p>
-            <Link href="/register">
-              <Button size="lg" className="gap-2" data-testid="button-register-cta">
-                Register Now <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
+
+            {/* CTA Buttons */}
+            <div className="flex flex-wrap items-center justify-center gap-3.5 pt-2">
+              <Link href="/fixtures">
+                <Button size="lg" className="rounded-xl px-7 py-5 text-sm font-bold bg-gradient-to-r from-blue-600 via-blue-500 to-sky-500 hover:from-blue-700 hover:to-sky-600 text-white shadow-xl shadow-blue-500/25 hover:shadow-blue-500/40 gap-2.5 transition-all">
+                  <Calendar className="h-4 w-4" />
+                  View Match Fixtures & Brackets
+                </Button>
+              </Link>
+              <Link href="/register">
+                <Button size="lg" variant="outline" className="rounded-xl px-7 py-5 text-sm font-bold border-border/80 hover:border-sky-500/50 hover:bg-sky-500/10 gap-2 transition-all">
+                  Register For Events <ArrowRight className="h-4 w-4 text-sky-500" />
+                </Button>
+              </Link>
+            </div>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </PublicLayout>
   );
 }

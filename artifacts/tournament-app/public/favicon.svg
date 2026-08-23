@@ -1,3 +1,10 @@
-<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect width="180" height="180" rx="36" fill="#FF3C00"/>
+<svg viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path
+    d="M 82 4 L 10 126 L 64 116 L 57 158 Q 54 166 62 164 L 96 157 Q 104 156 106 148 L 112 114 Q 114 106 106 108 L 64 116 L 82 4 Z"
+    fill="#2F70F2"
+  />
+  <path
+    d="M 118 196 L 190 74 L 136 84 L 143 42 Q 146 34 138 36 L 104 43 Q 96 44 94 52 L 88 86 Q 86 94 94 92 L 136 84 L 118 196 Z"
+    fill="#47BAF8"
+  />
 </svg>

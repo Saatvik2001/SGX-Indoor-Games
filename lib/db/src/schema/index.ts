@@ -19,17 +19,17 @@
 
 import { pgTable, text, serial, varchar, integer, timestamp, jsonb } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
-import { z } from 'zod';
+import type { z } from 'zod';
 
 export const registrations = pgTable('registrations', {
 	id: serial('id').primaryKey(),
 	employee_id: varchar('employee_id', { length: 64 }).notNull(),
 	provided_employee_id: varchar('provided_employee_id', { length: 128 }).notNull(),
 	employee_name: varchar('employee_name', { length: 256 }).notNull(),
-	department: varchar('department', { length: 128 }).default(null),
+	department: varchar('department', { length: 128 }),
 	tournament_id: varchar('tournament_id', { length: 32 }).notNull(),
 	event_id: varchar('event_id', { length: 64 }).notNull(),
-	partner_id: varchar('partner_id', { length: 64 }).default(null),
+	partner_id: varchar('partner_id', { length: 64 }),
 	location: varchar('location', { length: 64 }).notNull(),
 	registration_date: timestamp('registration_date').notNull()
 });
@@ -39,10 +39,10 @@ export const matches = pgTable('matches', {
 	event_id: varchar('event_id', { length: 64 }).notNull(),
 	round: varchar('round', { length: 64 }).notNull(),
 	player1_id: varchar('player1_id', { length: 64 }).notNull(),
-	player2_id: varchar('player2_id', { length: 64 }).default(null),
-	winner_id: varchar('winner_id', { length: 64 }).default(null),
+	player2_id: varchar('player2_id', { length: 64 }),
+	winner_id: varchar('winner_id', { length: 64 }),
 	status: varchar('status', { length: 32 }).notNull().default('Scheduled'),
-	scheduled_date: timestamp('scheduled_date').default(null),
+	scheduled_date: timestamp('scheduled_date'),
 	meta: jsonb('meta').default('{}')
 });
 
@@ -55,8 +55,8 @@ export const events = pgTable('events', {
 	meta: jsonb('meta').default('{}')
 });
 
-export const insertEventSchema = createInsertSchema(events).omit({});
-export type InsertEvent = z.infer<typeof insertEventSchema>;
+export const insertEventSchema = createInsertSchema(events);
+export type InsertEvent = typeof events.$inferInsert;
 
 export const tournaments = pgTable('tournaments', {
 	id: varchar('id', { length: 32 }).primaryKey(),
@@ -70,16 +70,18 @@ export const tournaments = pgTable('tournaments', {
 	status: varchar('status', { length: 64 }).notNull()
 });
 
-export const insertTournamentSchema = createInsertSchema(tournaments).omit({});
-export type InsertTournament = z.infer<typeof insertTournamentSchema>;
+export const insertTournamentSchema = createInsertSchema(tournaments);
+export type InsertTournament = typeof tournaments.$inferInsert;
 
-export const insertRegistrationSchema = createInsertSchema(registrations).omit({ id: true });
-export type InsertRegistration = z.infer<typeof insertRegistrationSchema>;
+export const insertRegistrationSchema = createInsertSchema(registrations);
+export type InsertRegistration = typeof registrations.$inferInsert;
 
-export const insertMatchSchema = createInsertSchema(matches).omit({ id: true });
-export type InsertMatch = z.infer<typeof insertMatchSchema>;
+export const insertMatchSchema = createInsertSchema(matches);
+export type InsertMatch = typeof matches.$inferInsert;
 
 export type Registration = typeof registrations.$inferSelect;
 export type Match = typeof matches.$inferSelect;
+export type Event = typeof events.$inferSelect;
+export type Tournament = typeof tournaments.$inferSelect;
 
 export { registrations as registrationsTable, matches as matchesTable, events as eventsTable, tournaments as tournamentsTable };

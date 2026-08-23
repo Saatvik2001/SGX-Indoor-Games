@@ -42,7 +42,7 @@ export default function Settings() {
                 <Label htmlFor="appName">Application Name</Label>
                 <Input
                   id="appName"
-                  defaultValue="Tournament Manager"
+                  defaultValue="Solugenix Tournament Arena"
                   data-testid="input-app-name"
                 />
               </div>
@@ -50,7 +50,7 @@ export default function Settings() {
                 <Label htmlFor="orgName">Organization Name</Label>
                 <Input
                   id="orgName"
-                  defaultValue="Office Indoor Games 2026"
+                  defaultValue="Solugenix"
                   data-testid="input-org-name"
                 />
               </div>
@@ -59,7 +59,7 @@ export default function Settings() {
                 <Input
                   id="contactEmail"
                   type="email"
-                  defaultValue="admin@company.com"
+                  defaultValue="events@solugenix.com"
                   data-testid="input-contact-email"
                 />
               </div>

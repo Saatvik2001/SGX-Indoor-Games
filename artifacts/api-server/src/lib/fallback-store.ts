@@ -55,6 +55,74 @@ interface PersistedState {
   tournaments: TournamentRecord[];
 }
 
+import {
+  buildTournamentMatches,
+  getBracketSlotCount,
+  getRoundNames,
+  normalizeParticipantIds,
+  shufflePlayers
+} from './fixture-engine';
+
+export {
+  getBracketSlotCount,
+  getRoundNames as getRoundNamesForParticipantCount,
+  normalizeParticipantIds,
+  shufflePlayers
+};
+
+export const getNextRoundName = (roundName: string) => {
+  const roundNames = ['Round 1', 'Round 2', 'Quarter Final', 'Semi Final', 'Final'];
+  const index = roundNames.indexOf(roundName);
+  if (index < 0 || index >= roundNames.length - 1) return null;
+  return roundNames[index + 1];
+};
+
+export const propagateWinnerToNextRound = (matches: MatchRecord[], eventId: string, existing: MatchRecord, winnerId: string) => {
+  const location = String(existing.meta?.location ?? '');
+  const roundLevel = Number(existing.meta?.round_level ?? 0);
+  const nextRoundLevel = roundLevel + 1;
+  const bracketIndex = Number(existing.meta?.bracket_index ?? 0);
+  const nextRoundMatches = matches
+    .filter((row) => row.event_id === eventId && Number(row.meta?.round_level ?? 0) === nextRoundLevel && String(row.meta?.location ?? '') === location)
+    .sort((a, b) => Number(a.meta?.bracket_index ?? 0) - Number(b.meta?.bracket_index ?? 0));
+
+  const targetBracketIndex = Math.floor(bracketIndex / 2);
+  const targetMatch = nextRoundMatches.find(row => Number(row.meta?.bracket_index ?? 0) === targetBracketIndex) || nextRoundMatches[targetBracketIndex] || nextRoundMatches[0];
+  if (!targetMatch) return;
+
+  const isPlayer1Slot = bracketIndex % 2 === 0;
+  if (isPlayer1Slot) {
+    targetMatch.player1_id = winnerId;
+  } else {
+    targetMatch.player2_id = winnerId;
+  }
+};
+
+export const buildBracketDraftMatches = (
+  eventId: string,
+  location: string,
+  participantIds: Array<string | null | undefined>,
+  format: 'Single Elimination' | 'Round Robin' | 'Double Elimination' = 'Single Elimination'
+) => {
+  const normalized = normalizeParticipantIds(participantIds);
+  if (normalized.length === 0) return [] as MatchRecord[];
+
+  const draftMatches = buildTournamentMatches(eventId, location, normalized, format);
+  let nextId = 1;
+
+  return draftMatches.map((m) => ({
+    id: nextId++,
+    event_id: eventId,
+    round: m.round,
+    player1_id: m.player1Id,
+    player2_id: m.player2Id,
+    winner_id: m.winnerId,
+    status: m.status,
+    scheduled_date: null,
+    meta: m.meta as Record<string, unknown>,
+  })) as MatchRecord[];
+};
+
 class FileFallbackStore {
   private readonly filePath: string;
   private state: PersistedState = { registrations: [], matches: [], events: [], tournaments: [] };
@@ -163,6 +231,22 @@ class FileFallbackStore {
     return record;
   }
 
+  async updateEvent(eventId: string, payload: Record<string, unknown>) {
+    await this.ensureLoaded();
+    const event = this.state.events.find((e) => e.id === eventId);
+    if (event) {
+      if (payload.name !== undefined) event.name = String(payload.name);
+      if (payload.type !== undefined) event.type = String(payload.type);
+      if (payload.game !== undefined) event.game = String(payload.game);
+      if (payload.meta !== undefined && typeof payload.meta === 'object') {
+        event.meta = { ...event.meta, ...(payload.meta as Record<string, unknown>) };
+      }
+      await this.save();
+      return event;
+    }
+    return null;
+  }
+
   async deleteEvent(eventId: string) {
     await this.ensureLoaded();
     this.state.events = this.state.events.filter((event) => event.id !== eventId);
@@ -197,12 +281,34 @@ class FileFallbackStore {
     return record;
   }
 
+  async updateTournament(tournamentId: string, payload: Record<string, unknown>) {
+    await this.ensureLoaded();
+    const tournament = this.state.tournaments.find((t) => t.id === tournamentId);
+    if (tournament) {
+      if (payload.name !== undefined) tournament.name = String(payload.name);
+      if (payload.description !== undefined) tournament.description = String(payload.description);
+      if (payload.location !== undefined) tournament.location = String(payload.location);
+      if (payload.registrationStartDate !== undefined) tournament.registration_start_date = String(payload.registrationStartDate);
+      if (payload.registrationEndDate !== undefined) tournament.registration_end_date = String(payload.registrationEndDate);
+      if (payload.tournamentStartDate !== undefined) tournament.tournament_start_date = String(payload.tournamentStartDate);
+      if (payload.tournamentEndDate !== undefined) tournament.tournament_end_date = String(payload.tournamentEndDate);
+      if (payload.status !== undefined) tournament.status = String(payload.status);
+      await this.save();
+      return tournament;
+    }
+    return null;
+  }
+
   async deleteTournament(tournamentId: string) {
     await this.ensureLoaded();
+    const tournamentEventIds = this.state.events
+      .filter((event) => event.tournament_id === tournamentId)
+      .map((event) => event.id);
+
     this.state.tournaments = this.state.tournaments.filter((tournament) => tournament.id !== tournamentId);
     this.state.events = this.state.events.filter((event) => event.tournament_id !== tournamentId);
-    this.state.registrations = this.state.registrations.filter((row) => row.tournament_id !== tournamentId);
-    this.state.matches = this.state.matches.filter((row) => !this.state.events.some((event) => event.id === row.event_id));
+    this.state.registrations = this.state.registrations.filter((row) => row.tournament_id !== tournamentId && !tournamentEventIds.includes(row.event_id));
+    this.state.matches = this.state.matches.filter((row) => !tournamentEventIds.includes(row.event_id));
     await this.save();
     return true;
   }
@@ -213,92 +319,21 @@ class FileFallbackStore {
     return this.state.matches.filter((row) => row.event_id === eventId);
   }
 
-  private getNextRoundName(roundName: string) {
-    const roundNames = ['Round 1', 'Quarter Final', 'Semi Final', 'Final'];
-    const index = roundNames.indexOf(roundName);
-    if (index < 0 || index >= roundNames.length - 1) return null;
-    return roundNames[index + 1];
-  }
-
-  private propagateWinnerToNextRound(existing: MatchRecord, winnerId: string) {
-    const nextRound = this.getNextRoundName(existing.round);
-    if (!nextRound) return;
-
-    const location = String(existing.meta?.location ?? '');
-    const bracketIndex = Number(existing.meta?.bracket_index ?? 0);
-    const nextRoundMatches = this.state.matches
-      .filter((row) => row.event_id === existing.event_id && row.round === nextRound && String(row.meta?.location ?? '') === location)
-      .sort((a, b) => Number(a.meta?.bracket_index ?? 0) - Number(b.meta?.bracket_index ?? 0));
-
-    const targetMatch = nextRoundMatches[Math.floor(bracketIndex / 2)];
-    if (!targetMatch) return;
-
-    const slot = bracketIndex % 2 === 0 ? 'player1_id' : 'player2_id';
-    if (slot === 'player1_id') {
-      targetMatch.player1_id = winnerId;
-    } else {
-      targetMatch.player2_id = winnerId;
-    }
-  }
-
-  async generateFixtures(eventId: string, perLocationPlayerIds: Record<string, string[]>) {
+  async generateFixtures(
+    eventId: string,
+    perLocationPlayerIds: Record<string, string[]>,
+    format: 'Single Elimination' | 'Round Robin' | 'Double Elimination' = 'Single Elimination'
+  ) {
     await this.ensureLoaded();
     this.state.matches = this.state.matches.filter((row) => row.event_id !== eventId);
 
     const generated: MatchRecord[] = [];
     let nextId = this.state.matches.reduce((max, row) => Math.max(max, row.id), 0) + 1;
 
-    const createRoundMatches = (roundName: string, playerIds: Array<string | null>, location: string, roundLevel: number) => {
-      const roundMatches: MatchRecord[] = [];
-      for (let index = 0; index < playerIds.length; index += 2) {
-        const player1Id = playerIds[index] ?? '';
-        const player2Id = playerIds[index + 1] ?? null;
-        const match: MatchRecord = {
-          id: nextId++,
-          event_id: eventId,
-          round: roundName,
-          player1_id: player1Id,
-          player2_id: player2Id,
-          winner_id: null,
-          status: 'Pending',
-          scheduled_date: null,
-          meta: { location, bracket_index: Math.floor(index / 2), round_level: roundLevel },
-        };
-        roundMatches.push(match);
-        generated.push(match);
-      }
-      return roundMatches;
-    };
-
     for (const [location, players] of Object.entries(perLocationPlayerIds || {})) {
-      const round1Players = players.filter(Boolean) as string[];
-      // compute match counts per round dynamically
-      const roundsCounts: number[] = [];
-      let matchesCount = Math.ceil(round1Players.length / 2);
-      roundsCounts.push(matchesCount);
-      while (matchesCount > 1) {
-        matchesCount = Math.ceil(matchesCount / 2);
-        roundsCounts.push(matchesCount);
-      }
-
-      // build round names mapping: last -> Final, last-1 -> Semi Final, last-2 -> Quarter Final, others Round N
-      const totalRounds = roundsCounts.length;
-      const roundNames = roundsCounts.map((_, idx) => {
-        const roundIdx = idx;
-        const fromEnd = totalRounds - 1 - roundIdx;
-        if (fromEnd === 0) return 'Final';
-        if (fromEnd === 1) return 'Semi Final';
-        if (fromEnd === 2) return 'Quarter Final';
-        return `Round ${roundIdx + 1}`;
-      });
-
-      // create Round 1 matches with players
-      let currentRoundMatches = createRoundMatches(roundNames[0], round1Players, location, 0);
-
-      // create placeholders for subsequent rounds
-      for (let r = 1; r < roundNames.length; r++) {
-        const placeholderPlayers = Array.from({ length: roundsCounts[r] }, () => null as string | null);
-        currentRoundMatches = createRoundMatches(roundNames[r], placeholderPlayers, location, r);
+      const locationMatches = buildBracketDraftMatches(eventId, location, players, format);
+      for (const match of locationMatches) {
+        generated.push({ ...match, id: nextId++ });
       }
     }
 
@@ -324,11 +359,13 @@ class FileFallbackStore {
     if (updates.meta && typeof updates.meta === 'object') {
       existing.meta = { ...existing.meta, ...(updates.meta as Record<string, unknown>) };
     }
+    if (updates.score !== undefined) existing.meta = { ...existing.meta, score: String(updates.score) };
+    if (updates.scheduled_time !== undefined) existing.meta = { ...existing.meta, scheduled_time: String(updates.scheduled_time) };
+    if (updates.venue !== undefined) existing.meta = { ...existing.meta, venue: String(updates.venue) };
 
     if (winnerId && String(updates.status || existing.status) === 'Completed' && previousWinner !== winnerId) {
       const winnerRegistration = this.state.registrations.find((row) => row.event_id === existing.event_id && row.employee_id === winnerId);
       if (winnerRegistration) {
-        // Preserve registration rows so champion data remains available.
         existing.meta = {
           ...existing.meta,
           winner_name: winnerRegistration.employee_name,
@@ -336,7 +373,30 @@ class FileFallbackStore {
           winner_location: winnerRegistration.location,
         };
       }
-      this.propagateWinnerToNextRound(existing, winnerId);
+      propagateWinnerToNextRound(this.state.matches, existing.event_id, existing, winnerId);
+
+      const finalMatch = this.state.matches
+        .filter((row) => row.event_id === existing.event_id)
+        .sort((a, b) => Number(a.meta?.round_level ?? 0) - Number(b.meta?.round_level ?? 0))
+        .at(-1);
+      if (finalMatch && finalMatch.id === existing.id) {
+        const event = this.state.events.find((row) => row.id === existing.event_id);
+        const tournament = event ? this.state.tournaments.find((row) => row.id === event.tournament_id) : undefined;
+        if (tournament) {
+          tournament.status = 'Completed';
+        }
+        if (event) {
+          existing.meta = {
+            ...existing.meta,
+            champion_name: winnerRegistration?.employee_name || winnerId,
+            champion_employee_id: winnerId,
+            runner_up_name: existing.player1_id === winnerId
+              ? this.state.registrations.find((row) => row.event_id === existing.event_id && row.employee_id === existing.player2_id)?.employee_name || existing.player2_id || undefined
+              : this.state.registrations.find((row) => row.event_id === existing.event_id && row.employee_id === existing.player1_id)?.employee_name || existing.player1_id || undefined,
+            runner_up_employee_id: existing.player1_id === winnerId ? existing.player2_id : existing.player1_id,
+          };
+        }
+      }
     }
 
     await this.save();

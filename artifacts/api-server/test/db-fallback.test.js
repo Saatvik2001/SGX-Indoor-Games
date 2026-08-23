@@ -62,20 +62,20 @@ test('deletes an event from the fallback store and removes related data', async 
   assert.equal((await fallbackStore.getRegistrations(eventId)).length, 0);
 });
 
-test('removes a winning registration from the fallback store and keeps champion metadata', async () => {
-  const eventId = 'winner-removal-test-1';
+test('generates a valid bracket for an odd number of participants with BYEs and progresses winners automatically', async () => {
+  const eventId = 'bracket-progression-test-1';
   await fallbackStore.addEvent({
     id: eventId,
-    tournamentId: 't-winner-test',
-    name: 'Winner Removal Event',
+    tournamentId: 't-bracket-test',
+    name: 'Bracket Progression Event',
     type: 'Singles',
     game: 'Badminton',
     meta: {}
   });
   await fallbackStore.addTournament({
-    id: 't-winner-test',
-    name: 'Winner Test Tournament',
-    description: 'For winner tests',
+    id: 't-bracket-test',
+    name: 'Bracket Progression Tournament',
+    description: 'For bracket tests',
     location: 'Hyderabad',
     registrationStartDate: '2026-08-01T00:00:00.000Z',
     registrationEndDate: '2026-08-10T00:00:00.000Z',
@@ -84,28 +84,95 @@ test('removes a winning registration from the fallback store and keeps champion 
     status: 'Draft'
   });
   await fallbackStore.addRegistrations([
-    {
-      employeeId: 'WIN-1',
-      providedEmployeeId: 'WIN-1',
-      employeeName: 'Winner Person',
-      department: 'Ops',
-      tournamentId: 't-winner-test',
-      eventId,
-      eventType: 'Singles',
-      location: 'Hyderabad',
-      registrationDate: '2026-08-03T00:00:00.000Z'
-    }
+    { employeeId: 'P1', providedEmployeeId: 'P1', employeeName: 'Player 1', department: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
+    { employeeId: 'P2', providedEmployeeId: 'P2', employeeName: 'Player 2', department: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
+    { employeeId: 'P3', providedEmployeeId: 'P3', employeeName: 'Player 3', department: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
+    { employeeId: 'P4', providedEmployeeId: 'P4', employeeName: 'Player 4', department: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
+    { employeeId: 'P5', providedEmployeeId: 'P5', employeeName: 'Player 5', department: 'Ops', tournamentId: 't-bracket-test', eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' }
   ]);
-  await fallbackStore.generateFixtures(eventId, { Hyderabad: ['WIN-1'] });
+
+  await fallbackStore.generateFixtures(eventId, { Hyderabad: ['P1', 'P2', 'P3', 'P4', 'P5'] });
 
   const matches = await fallbackStore.getMatches(eventId);
-  const match = matches[0];
-  const updated = await fallbackStore.updateMatch(match.id, { winner_id: 'WIN-1', status: 'Completed' });
-  const registrations = await fallbackStore.getRegistrations(eventId);
+  const round1Matches = matches.filter((row) => row.round === 'Round 1');
+  assert.equal(round1Matches.length, 4);
 
-  assert.equal(updated?.winner_id, 'WIN-1');
-  assert.equal(updated?.status, 'Completed');
-  assert.equal(registrations.some((row) => row.employee_id === 'WIN-1'), false);
-  assert.equal(updated?.meta?.winner_name, 'Winner Person');
-  assert.equal(updated?.meta?.winner_removed, true);
+  const firstRoundParticipants = round1Matches.flatMap((row) => [row.player1_id, row.player2_id].filter(Boolean));
+  assert.equal(firstRoundParticipants.filter((id) => id === 'P1').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'P2').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'P3').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'P4').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'P5').length, 1);
+
+  const byeMatch = round1Matches.find((row) => row.meta?.is_bye === true);
+  assert.ok(byeMatch);
+  assert.equal(byeMatch?.winner_id, 'P4');
+  assert.equal(byeMatch?.status, 'Completed');
+
+  const updated = await fallbackStore.updateMatch(byeMatch.id, { winner_id: 'P4', status: 'Completed' });
+  assert.equal(updated?.winner_id, 'P4');
+
+  const nextRoundMatch = matches.find((row) => row.round === 'Semi Final' && (row.player1_id === 'P4' || row.player2_id === 'P4'));
+  assert.ok(nextRoundMatch);
+  assert.equal(nextRoundMatch?.player1_id === 'P4' || nextRoundMatch?.player2_id === 'P4', true);
+});
+
+test('regenerating fixtures clears old bracket state and removes duplicates', async () => {
+  const eventId = 'regeneration-test-1';
+  const tournamentId = 't-regeneration-test';
+  await fallbackStore.addEvent({
+    id: eventId,
+    tournamentId,
+    name: 'Regeneration Event',
+    type: 'Singles',
+    game: 'Badminton',
+    meta: {}
+  });
+  await fallbackStore.addTournament({
+    id: tournamentId,
+    name: 'Regeneration Tournament',
+    description: 'For regeneration tests',
+    location: 'Hyderabad',
+    registrationStartDate: '2026-08-01T00:00:00.000Z',
+    registrationEndDate: '2026-08-10T00:00:00.000Z',
+    tournamentStartDate: '2026-08-12T00:00:00.000Z',
+    tournamentEndDate: '2026-08-14T00:00:00.000Z',
+    status: 'Draft'
+  });
+  await fallbackStore.addRegistrations([
+    { employeeId: 'R1', providedEmployeeId: 'R1', employeeName: 'Reg 1', department: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
+    { employeeId: 'R2', providedEmployeeId: 'R2', employeeName: 'Reg 2', department: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
+    { employeeId: 'R3', providedEmployeeId: 'R3', employeeName: 'Reg 3', department: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' },
+    { employeeId: 'R4', providedEmployeeId: 'R4', employeeName: 'Reg 4', department: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' }
+  ]);
+
+  const firstRun = await fallbackStore.generateFixtures(eventId, { Hyderabad: ['R1', 'R2', 'R2', 'R3', 'R4'] });
+  const firstRoundParticipants = firstRun.filter((row) => row.round === 'Round 1').flatMap((row) => [row.player1_id, row.player2_id].filter(Boolean));
+  assert.equal(firstRoundParticipants.filter((id) => id === 'R2').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'R1').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'R3').length, 1);
+  assert.equal(firstRoundParticipants.filter((id) => id === 'R4').length, 1);
+  assert.equal(new Set(firstRoundParticipants).size, firstRoundParticipants.length);
+
+  const secondRun = await fallbackStore.generateFixtures(eventId, { Hyderabad: ['R1', 'R2', 'R3', 'R4'] });
+  const secondRoundParticipants = secondRun.filter((row) => row.round === 'Round 1').flatMap((row) => [row.player1_id, row.player2_id].filter(Boolean));
+  assert.equal(secondRoundParticipants.length, 4);
+  assert.equal(new Set(secondRoundParticipants).size, secondRoundParticipants.length);
+  assert.equal(secondRun.some((row) => row.player1_id === 'R2' && row.player2_id === 'R2'), false);
+});
+
+test('deleteTournament removes related fixtures and bracket data from the fallback store', async () => {
+  const eventId = 'delete-tournament-test-1';
+  const tournamentId = 't-delete-tournament-test';
+  await fallbackStore.addEvent({ id: eventId, tournamentId, name: 'Delete Tournament Event', type: 'Singles', game: 'Badminton', meta: {} });
+  await fallbackStore.addTournament({ id: tournamentId, name: 'Delete Tournament', description: 'Delete me', location: 'Hyderabad', registrationStartDate: '2026-08-01T00:00:00.000Z', registrationEndDate: '2026-08-10T00:00:00.000Z', tournamentStartDate: '2026-08-12T00:00:00.000Z', tournamentEndDate: '2026-08-14T00:00:00.000Z', status: 'Draft' });
+  await fallbackStore.addRegistrations([{ employeeId: 'DT1', providedEmployeeId: 'DT1', employeeName: 'Delete Tournament Player', department: 'Ops', tournamentId, eventId, eventType: 'Singles', location: 'Hyderabad', registrationDate: '2026-08-03T00:00:00.000Z' }]);
+  await fallbackStore.generateFixtures(eventId, { Hyderabad: ['DT1'] });
+
+  await fallbackStore.deleteTournament(tournamentId);
+
+  assert.equal((await fallbackStore.getTournaments()).some((row) => row.id === tournamentId), false);
+  assert.equal((await fallbackStore.getEvents()).some((row) => row.id === eventId), false);
+  assert.equal((await fallbackStore.getRegistrations(eventId)).length, 0);
+  assert.equal((await fallbackStore.getMatches(eventId)).length, 0);
 });
