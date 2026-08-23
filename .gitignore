@@ -49,6 +49,8 @@ Thumbs.db
 .local/
 .npm-cache/
 .pnpm-store/
+node/
+test-download.txt
 
 # Environment files
 .env
