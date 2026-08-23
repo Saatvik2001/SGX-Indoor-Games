@@ -24,30 +24,34 @@ router.get('/', async (_req, res) => {
 // POST /api/tournaments
 router.post('/', async (req, res) => {
   try {
-    if (!db || !pool) {
-      await fallbackStore.addTournament(req.body);
-      return res.status(201).json({ ok: true });
-    }
     const b = req.body;
-    await pool.query(
-      `INSERT INTO tournaments(id, name, description, location, registration_start_date, registration_end_date, tournament_start_date, tournament_end_date, status)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO UPDATE SET name = $2, description = $3, location = $4, status = $9 RETURNING *`,
-      [
-        b.id,
-        b.name,
-        b.description,
-        b.location,
-        b.registrationStartDate ? new Date(b.registrationStartDate) : new Date(),
-        b.registrationEndDate ? new Date(b.registrationEndDate) : new Date(),
-        b.tournamentStartDate ? new Date(b.tournamentStartDate) : new Date(),
-        b.tournamentEndDate ? new Date(b.tournamentEndDate) : new Date(),
-        b.status || 'Draft'
-      ]
+    await withDatabaseFallback(
+      async () => {
+        if (!pool) throw new Error('no_pool');
+        await pool.query(
+          `INSERT INTO tournaments(id, name, description, location, registration_start_date, registration_end_date, tournament_start_date, tournament_end_date, status)
+           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT (id) DO UPDATE SET name = $2, description = $3, location = $4, status = $9 RETURNING *`,
+          [
+            b.id,
+            b.name,
+            b.description || '',
+            b.location || '',
+            b.registrationStartDate ? new Date(b.registrationStartDate) : new Date(),
+            b.registrationEndDate ? new Date(b.registrationEndDate) : new Date(),
+            b.tournamentStartDate ? new Date(b.tournamentStartDate) : new Date(),
+            b.tournamentEndDate ? new Date(b.tournamentEndDate) : new Date(),
+            b.status || 'Draft'
+          ]
+        );
+      },
+      async () => {
+        await fallbackStore.addTournament(b);
+      }
     );
     return res.status(201).json({ ok: true });
-  } catch (err) {
+  } catch (err: any) {
     logger.error({ err }, 'Error creating tournament');
-    return res.status(500).json({ error: 'internal' });
+    return res.status(500).json({ error: err?.message || 'internal' });
   }
 });
 
