@@ -33,13 +33,19 @@ function Router() {
     <Switch>
       {/* Public Routes */}
       <Route path="/" component={Landing} />
+      <Route path="/tournaments" component={Fixtures} />
       <Route path="/login" component={Login} />
       <Route path="/register" component={Register} />
       <Route path="/fixtures" component={Fixtures} />
       <Route path="/results" component={Results} />
       <Route path="/champions" component={Champions} />
 
-      {/* Admin Routes - Protected */}
+      {/* Admin Redirect */}
+      <Route path="/admin">
+        <ProtectedRoute>
+          <Dashboard />
+        </ProtectedRoute>
+      </Route>
       <Route path="/admin/dashboard">
         <ProtectedRoute>
           <Dashboard />

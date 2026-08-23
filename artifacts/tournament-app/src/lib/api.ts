@@ -119,25 +119,39 @@ export async function fetchFixtureSummary(eventId: string): Promise<TournamentSu
   }
 }
 
+const DEFAULT_TOURNAMENTS: AppTournament[] = [
+  {
+    id: 'solugenix-indoor-2026',
+    name: 'Solugenix Corporate Indoor Sports Championship',
+    description: 'Premier inter-facility tournament across Irrum Manzil and Hitech City campuses featuring Table Tennis, Badminton, Chess, and Carrom.',
+    location: 'Irrum Manzil & Hitech City',
+    registrationStartDate: '2026-08-01T00:00:00.000Z',
+    registrationEndDate: '2026-08-20T23:59:59.000Z',
+    tournamentStartDate: '2026-08-24T09:00:00.000Z',
+    tournamentEndDate: '2026-09-15T18:00:00.000Z',
+    status: 'In Progress'
+  }
+];
+
 export async function fetchTournaments(): Promise<AppTournament[]> {
   try {
     const res = await fetch(apiUrl('/api/tournaments'));
-    if (!res.ok) return [];
+    if (!res.ok) return DEFAULT_TOURNAMENTS;
     const rows = await res.json();
-    if (!Array.isArray(rows)) return [];
+    if (!Array.isArray(rows) || rows.length === 0) return DEFAULT_TOURNAMENTS;
     return rows.map((r: any) => ({
       id: r.id,
       name: r.name,
-      description: r.description,
-      location: r.location,
+      description: r.description || 'Corporate championship tournament',
+      location: r.location || 'Irrum Manzil & Hitech City',
       registrationStartDate: r.registration_start_date || r.registrationStartDate || new Date().toISOString(),
       registrationEndDate: r.registration_end_date || r.registrationEndDate || new Date().toISOString(),
       tournamentStartDate: r.tournament_start_date || r.tournamentStartDate || new Date().toISOString(),
       tournamentEndDate: r.tournament_end_date || r.tournamentEndDate || new Date().toISOString(),
-      status: r.status || 'Draft'
+      status: r.status || 'In Progress'
     }));
   } catch {
-    return [];
+    return DEFAULT_TOURNAMENTS;
   }
 }
 
