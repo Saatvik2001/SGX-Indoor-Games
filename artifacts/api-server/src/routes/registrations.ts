@@ -35,10 +35,21 @@ router.post("/", async (req, res) => {
 
       const insertedRows = [];
       for (const r of registrations) {
+        const empId = r.employeeId || r.employee_id || `EMP-${Date.now()}`;
+        const provEmpId = r.providedEmployeeId || r.provided_employee_id || empId;
+        const empName = r.employeeName || r.employee_name || 'Participant';
+        const dept = r.department || null;
+        const tournId = r.tournamentId || r.tournament_id || 'solugenix-indoor-2026';
+        const evId = r.eventId || r.event_id;
+        const partnerId = r.partnerId || r.partner_id || null;
+        const loc = r.location || 'Irrum Manzil';
+        const rawDate = r.registrationDate || r.registration_date;
+        const regDate = rawDate ? new Date(rawDate) : new Date();
+
         const insertRes = await p.query(
           `INSERT INTO registrations(employee_id, provided_employee_id, employee_name, department, tournament_id, event_id, partner_id, location, registration_date)
            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
-          [r.employeeId, r.providedEmployeeId, r.employeeName, r.department || null, r.tournamentId, r.eventId, r.partnerId || null, r.location, new Date(r.registrationDate)]
+          [empId, provEmpId, empName, dept, tournId, evId, partnerId, loc, isNaN(regDate.getTime()) ? new Date() : regDate]
         );
         const row = insertRes.rows[0];
         insertedRows.push(row);
