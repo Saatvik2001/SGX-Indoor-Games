@@ -1,56 +1,62 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { BarChart3, Download, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { events } from '@/data/events';
-import { matches } from '@/data/matches';
-import { employees } from '@/data/employees';
-import { apiUrl } from '@/lib/api';
+import { fetchEvents, fetchMatches, fetchRegistrations, type AppEvent, type AppMatch, type AppRegistration } from '@/lib/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
 export default function Reports() {
-  const [regs, setRegs] = useState<any[]>([]);
+  const [regs, setRegs] = useState<AppRegistration[]>([]);
+  const [eventsList, setEventsList] = useState<AppEvent[]>([]);
+  const [matchesList, setMatchesList] = useState<AppMatch[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    const loadRegistrations = async () => {
+    const loadReportData = async () => {
+      setLoading(true);
       try {
-        const res = await fetch(apiUrl('/api/registrations'));
+        const [r, e, m] = await Promise.all([
+          fetchRegistrations(),
+          fetchEvents(),
+          fetchMatches()
+        ]);
         if (!mounted) return;
-        if (res.ok) {
-          const rows = await res.json();
-          setRegs(Array.isArray(rows) ? rows : []);
-        }
-      } catch {
-        if (mounted) setRegs([]);
+        setRegs(r);
+        setEventsList(e);
+        setMatchesList(m);
+      } finally {
+        if (mounted) setLoading(false);
       }
     };
 
-    loadRegistrations();
+    loadReportData();
     return () => { mounted = false; };
   }, []);
 
-  const departmentData = [
-    'Engineering', 'HR', 'Finance', 'Marketing', 'Operations', 'Sales', 'Design', 'Legal'
-  ].map(dept => ({
-    department: dept,
-    employees: employees.filter(e => e.department === dept).length,
-    registrations: regs.filter(r => {
-      const emp = employees.find(e => e.id === r.employee_id);
-      return emp?.department === dept;
-    }).length
-  }));
+  const departmentData = useMemo(() => {
+    const defaultDepts = ['Engineering', 'HR', 'Finance', 'Marketing', 'Operations', 'Sales', 'Design', 'Legal'];
+    const foundDepts = Array.from(new Set(regs.map(r => r.department).filter(Boolean))) as string[];
+    const allDepts = Array.from(new Set([...defaultDepts, ...foundDepts]));
 
-  const eventProgress = events.map(event => {
-    const eventMatches = matches.filter(m => m.eventId === event.id);
-    const completed = eventMatches.filter(m => m.status === "Completed").length;
-    const total = eventMatches.length;
-    return {
-      name: event.name.replace(/Table Tennis |Carrom /, ''),
-      progress: total > 0 ? Math.round((completed / total) * 100) : 0
-    };
-  });
+    return allDepts.map(dept => ({
+      department: dept,
+      registrations: regs.filter(r => (r.department || 'General') === dept).length
+    })).filter(d => d.registrations > 0 || defaultDepts.includes(d.department));
+  }, [regs]);
+
+  const eventProgress = useMemo(() => {
+    return eventsList.map(event => {
+      const eventMatches = matchesList.filter(m => m.eventId === event.id);
+      const completed = eventMatches.filter(m => m.status === "Completed").length;
+      const total = eventMatches.length;
+      return {
+        name: event.name.replace(/Table Tennis |Carrom /i, ''),
+        progress: total > 0 ? Math.round((completed / total) * 100) : 0
+      };
+    });
+  }, [eventsList, matchesList]);
 
   return (
     <AdminLayout>
@@ -66,9 +72,8 @@ export default function Reports() {
             // Build CSV from registrations
             const headers = ['providedEmployeeId','employeeName','eventId','eventName','location','registrationDate'];
             const rows = regs.map(r => {
-              const ev = events.find(e => e.id === r.event_id);
-              const emp = employees.find(e => e.id === r.employee_id);
-              return [r.provided_employee_id || '', emp?.name || r.employee_name || '', r.event_id, ev?.name || '', r.location, r.registration_date];
+              const ev = eventsList.find(e => e.id === r.eventId);
+              return [r.providedEmployeeId || r.employeeId || '', r.employeeName || '', r.eventId, ev?.name || '', r.location, r.registrationDate];
             });
             const csv = [headers.join(','), ...rows.map(r => r.map(String).map(s => `"${s.replace(/"/g,'""')}"`).join(','))].join('\n');
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -100,7 +105,7 @@ export default function Reports() {
             <CardContent className="pt-6">
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-2">Total Matches</p>
-                <p className="text-3xl font-bold text-primary">{matches.length}</p>
+                <p className="text-3xl font-bold text-primary">{matchesList.length}</p>
               </div>
             </CardContent>
           </Card>
@@ -109,7 +114,7 @@ export default function Reports() {
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-2">Completion Rate</p>
                 <p className="text-3xl font-bold text-primary">
-                  {Math.round((matches.filter(m => m.status === "Completed").length / matches.length) * 100)}%
+                  {matchesList.length > 0 ? Math.round((matchesList.filter(m => m.status === "Completed").length / matchesList.length) * 100) : 0}%
                 </p>
               </div>
             </CardContent>
@@ -118,7 +123,7 @@ export default function Reports() {
             <CardContent className="pt-6">
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-2">Active Events</p>
-                <p className="text-3xl font-bold text-primary">{events.length}</p>
+                <p className="text-3xl font-bold text-primary">{eventsList.length}</p>
               </div>
             </CardContent>
           </Card>
@@ -132,14 +137,14 @@ export default function Reports() {
                 <BarChart3 className="h-5 w-5 text-primary" />
                 Department Participation
               </CardTitle>
-              <CardDescription>Employee count vs registrations by department</CardDescription>
+              <CardDescription>Participation count by department</CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={departmentData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="department" stroke="hsl(var(--muted-foreground))" fontSize={12} angle={-45} textAnchor="end" height={80} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} allowDecimals={false} />
                   <Tooltip 
                     contentStyle={{ 
                       backgroundColor: 'hsl(var(--card))', 
@@ -147,7 +152,6 @@ export default function Reports() {
                       borderRadius: '8px'
                     }} 
                   />
-                  <Bar dataKey="employees" fill="hsl(var(--muted))" name="Employees" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="registrations" fill="hsl(var(--primary))" name="Registrations" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -201,11 +205,11 @@ export default function Reports() {
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span>Irrum Manzil</span>
-                    <span className="font-medium">{regs.filter(r => (r.location || '').includes('Irrum')).length}</span>
+                    <span className="font-medium">{regs.filter(r => (r.location || '').includes('Irrum') || (r.location || '').includes('Hyderabad')).length}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Hitech City</span>
-                    <span className="font-medium">{regs.filter(r => (r.location || '').includes('Hitech')).length}</span>
+                    <span className="font-medium">{regs.filter(r => (r.location || '').includes('Hitech') || (r.location || '').includes('Bangalore')).length}</span>
                   </div>
                 </div>
               </div>
@@ -214,15 +218,15 @@ export default function Reports() {
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span>Completed</span>
-                    <span className="font-medium">{matches.filter(m => m.status === "Completed").length}</span>
+                    <span className="font-medium">{matchesList.filter(m => m.status === "Completed").length}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Scheduled</span>
-                    <span className="font-medium">{matches.filter(m => m.status === "Scheduled").length}</span>
+                    <span className="font-medium">{matchesList.filter(m => m.status === "Scheduled").length}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Pending</span>
-                    <span className="font-medium">{matches.filter(m => m.status === "Pending").length}</span>
+                    <span className="font-medium">{matchesList.filter(m => m.status === "Pending").length}</span>
                   </div>
                 </div>
               </div>
@@ -231,11 +235,11 @@ export default function Reports() {
                 <div className="space-y-1 text-sm">
                   <div className="flex justify-between">
                     <span>Singles</span>
-                    <span className="font-medium">{events.filter(e => e.type === "Singles").length}</span>
+                    <span className="font-medium">{eventsList.filter(e => e.type === "Singles").length}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Doubles</span>
-                    <span className="font-medium">{events.filter(e => e.type === "Doubles").length}</span>
+                    <span className="font-medium">{eventsList.filter(e => e.type === "Doubles").length}</span>
                   </div>
                 </div>
               </div>

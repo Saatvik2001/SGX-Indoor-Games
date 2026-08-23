@@ -19,17 +19,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const login = (username?: string, password?: string) => {
-    // If no credentials provided, allow 1-click admin login
-    if (!username && !password) {
-      setIsAuthenticated(true);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('tournament_auth', 'true');
-        sessionStorage.setItem('tournament_auth', 'true');
-      }
-      return true;
-    }
+    const trimmedUser = (username || '').trim().toLowerCase();
+    const trimmedPass = password || '';
 
-    if ((username === 'admin' || username === 'solugenix') && (password === 'admin123' || password === 'sgx2026' || !password)) {
+    if (trimmedUser === 'admin' && trimmedPass === 'admin123') {
       setIsAuthenticated(true);
       if (typeof window !== 'undefined') {
         localStorage.setItem('tournament_auth', 'true');

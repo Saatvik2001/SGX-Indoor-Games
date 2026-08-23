@@ -25,22 +25,10 @@ import { useToast } from '@/hooks/use-toast';
 import { fetchTournaments, apiUrl, type AppTournament } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-const DEFAULT_DEMO_TOURNAMENT: AppTournament = {
-  id: 'solugenix-indoor-2026',
-  name: 'Solugenix Corporate Indoor Sports Championship',
-  description: 'Premier inter-facility championship across Irrum Manzil & Hitech City campuses featuring Table Tennis, Badminton, Chess, and Carrom.',
-  location: 'Irrum Manzil & Hitech City',
-  registrationStartDate: '2026-08-01T00:00:00.000Z',
-  registrationEndDate: '2026-08-20T23:59:59.000Z',
-  tournamentStartDate: '2026-08-24T09:00:00.000Z',
-  tournamentEndDate: '2026-09-15T18:00:00.000Z',
-  status: 'In Progress'
-};
-
 export default function Tournaments() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [tournamentList, setTournamentList] = useState<AppTournament[]>([DEFAULT_DEMO_TOURNAMENT]);
+  const [tournamentList, setTournamentList] = useState<AppTournament[]>([]);
   const [loading, setLoading] = useState(false);
 
   // Dialog State
@@ -63,13 +51,9 @@ export default function Tournaments() {
     setLoading(true);
     try {
       const list = await fetchTournaments();
-      if (Array.isArray(list) && list.length > 0) {
-        setTournamentList(list);
-      } else {
-        setTournamentList([DEFAULT_DEMO_TOURNAMENT]);
-      }
+      setTournamentList(Array.isArray(list) ? list : []);
     } catch {
-      setTournamentList([DEFAULT_DEMO_TOURNAMENT]);
+      setTournamentList([]);
     } finally {
       setLoading(false);
     }
@@ -210,16 +194,15 @@ export default function Tournaments() {
 
     try {
       const res = await fetch(apiUrl(`/api/tournaments/${t.id}`), { method: 'DELETE' });
+      setTournamentList(prev => prev.filter(x => x.id !== t.id));
       if (res.ok) {
-        toast({ title: 'Tournament Deleted' });
-        await loadData();
+        toast({ title: 'Tournament Deleted 🗑️', description: `Successfully deleted "${t.name}".` });
       } else {
-        setTournamentList(prev => prev.filter(x => x.id !== t.id));
-        toast({ title: 'Tournament Deleted' });
+        toast({ title: 'Tournament Deleted 🗑️', description: `Removed "${t.name}".` });
       }
     } catch {
       setTournamentList(prev => prev.filter(x => x.id !== t.id));
-      toast({ title: 'Tournament Deleted' });
+      toast({ title: 'Tournament Deleted 🗑️', description: `Removed "${t.name}".` });
     }
   };
 
@@ -240,12 +223,25 @@ export default function Tournaments() {
           </Button>
         </div>
 
-        {/* Tournament Cards List */}
+        {/* Tournament Cards List / Empty State */}
         {loading ? (
           <div className="text-center py-16 text-muted-foreground">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-3"></div>
             Loading tournaments…
           </div>
+        ) : tournamentList.length === 0 ? (
+          <Card className="border border-dashed border-border/80 rounded-2xl p-12 text-center bg-card/40 backdrop-blur-xs">
+            <div className="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-4 shadow-inner">
+              <Trophy className="h-8 w-8" />
+            </div>
+            <h3 className="text-xl font-bold font-['Outfit']">No Tournaments Found</h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto mt-1 mb-6">
+              There are currently no active tournaments. Click below to create a new corporate championship.
+            </p>
+            <Button onClick={handleOpenCreate} className="gap-2 rounded-xl font-semibold shadow-xs">
+              <Plus className="h-4 w-4" /> Create First Tournament
+            </Button>
+          </Card>
         ) : (
           <div className="grid gap-6">
             {tournamentList.map(tournament => {

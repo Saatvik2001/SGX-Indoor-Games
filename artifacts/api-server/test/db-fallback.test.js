@@ -94,7 +94,7 @@ test('generates a valid bracket for an odd number of participants with BYEs and 
   await fallbackStore.generateFixtures(eventId, { Hyderabad: ['P1', 'P2', 'P3', 'P4', 'P5'] });
 
   const matches = await fallbackStore.getMatches(eventId);
-  const round1Matches = matches.filter((row) => row.round === 'Round 1');
+  const round1Matches = matches.filter((row) => Number(row.meta?.round_level ?? -1) === 0);
   assert.equal(round1Matches.length, 4);
 
   const firstRoundParticipants = round1Matches.flatMap((row) => [row.player1_id, row.player2_id].filter(Boolean));
@@ -106,15 +106,17 @@ test('generates a valid bracket for an odd number of participants with BYEs and 
 
   const byeMatch = round1Matches.find((row) => row.meta?.is_bye === true);
   assert.ok(byeMatch);
-  assert.equal(byeMatch?.winner_id, 'P4');
   assert.equal(byeMatch?.status, 'Completed');
+  const byePlayerId = byeMatch?.player1_id;
+  assert.ok(byePlayerId);
+  assert.equal(byeMatch?.winner_id, byePlayerId);
 
-  const updated = await fallbackStore.updateMatch(byeMatch.id, { winner_id: 'P4', status: 'Completed' });
-  assert.equal(updated?.winner_id, 'P4');
+  const updated = await fallbackStore.updateMatch(byeMatch.id, { winner_id: byePlayerId, status: 'Completed' });
+  assert.equal(updated?.winner_id, byePlayerId);
 
-  const nextRoundMatch = matches.find((row) => row.round === 'Semi Final' && (row.player1_id === 'P4' || row.player2_id === 'P4'));
+  const nextRoundMatch = matches.find((row) => row.round === 'Semi Final' && (row.player1_id === byePlayerId || row.player2_id === byePlayerId));
   assert.ok(nextRoundMatch);
-  assert.equal(nextRoundMatch?.player1_id === 'P4' || nextRoundMatch?.player2_id === 'P4', true);
+  assert.equal(nextRoundMatch?.player1_id === byePlayerId || nextRoundMatch?.player2_id === byePlayerId, true);
 });
 
 test('regenerating fixtures clears old bracket state and removes duplicates', async () => {
@@ -147,7 +149,7 @@ test('regenerating fixtures clears old bracket state and removes duplicates', as
   ]);
 
   const firstRun = await fallbackStore.generateFixtures(eventId, { Hyderabad: ['R1', 'R2', 'R2', 'R3', 'R4'] });
-  const firstRoundParticipants = firstRun.filter((row) => row.round === 'Round 1').flatMap((row) => [row.player1_id, row.player2_id].filter(Boolean));
+  const firstRoundParticipants = firstRun.filter((row) => Number(row.meta?.round_level ?? -1) === 0).flatMap((row) => [row.player1_id, row.player2_id].filter(Boolean));
   assert.equal(firstRoundParticipants.filter((id) => id === 'R2').length, 1);
   assert.equal(firstRoundParticipants.filter((id) => id === 'R1').length, 1);
   assert.equal(firstRoundParticipants.filter((id) => id === 'R3').length, 1);
@@ -155,9 +157,10 @@ test('regenerating fixtures clears old bracket state and removes duplicates', as
   assert.equal(new Set(firstRoundParticipants).size, firstRoundParticipants.length);
 
   const secondRun = await fallbackStore.generateFixtures(eventId, { Hyderabad: ['R1', 'R2', 'R3', 'R4'] });
-  const secondRoundParticipants = secondRun.filter((row) => row.round === 'Round 1').flatMap((row) => [row.player1_id, row.player2_id].filter(Boolean));
+  const secondRoundParticipants = secondRun.filter((row) => Number(row.meta?.round_level ?? -1) === 0).flatMap((row) => [row.player1_id, row.player2_id].filter(Boolean));
   assert.equal(secondRoundParticipants.length, 4);
   assert.equal(new Set(secondRoundParticipants).size, secondRoundParticipants.length);
+  assert.equal(secondRun.some((row) => row.player1_id === 'R2' && row.player2_id === 'R2'), false);
   assert.equal(secondRun.some((row) => row.player1_id === 'R2' && row.player2_id === 'R2'), false);
 });
 

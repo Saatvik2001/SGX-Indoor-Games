@@ -61,7 +61,7 @@ import {
   getRoundNames,
   normalizeParticipantIds,
   shufflePlayers
-} from './fixture-engine';
+} from './fixture-engine.ts';
 
 export {
   getBracketSlotCount,

@@ -10,26 +10,26 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SolugenixLogo } from '@/components/SolugenixLogo';
 
 export default function Login() {
-  const [username, setUsername] = useState('admin');
-  const [password, setPassword] = useState('admin123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login } = useAuth();
   const [, setLocation] = useLocation();
 
-  const handleQuickLogin = () => {
-    login();
-    setLocation('/admin/dashboard');
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!username.trim() || !password) {
+      setError('Please enter both username and password.');
+      return;
+    }
     
     const success = login(username, password);
     if (success) {
       setLocation('/admin/dashboard');
     } else {
-      setError('Invalid credentials. Please try admin / admin123');
+      setError('Invalid credentials. Only administrator access is permitted with username "admin" and password "admin123".');
     }
   };
 
@@ -51,34 +51,18 @@ export default function Login() {
 
         <Card className="border border-sky-500/20 shadow-xl shadow-blue-500/5 backdrop-blur-sm rounded-2xl">
           <CardHeader>
-            <CardTitle className="text-xl font-bold font-['Outfit']">Admin Portal Sign In</CardTitle>
-            <CardDescription>Access tournament management, fixtures, and scorecards</CardDescription>
+            <CardTitle className="text-xl font-bold font-['Outfit'] flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              Admin Portal Sign In
+            </CardTitle>
+            <CardDescription>Enter administrator credentials to access tournament management</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* 1-Click Instant Sign In Button */}
-            <Button
-              type="button"
-              onClick={handleQuickLogin}
-              className="w-full rounded-xl font-bold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-700 hover:to-sky-600 text-white shadow-lg shadow-blue-500/20 py-5 gap-2"
-              data-testid="button-quick-login"
-            >
-              <ShieldCheck className="h-5 w-5" />
-              Sign In as Administrator
-              <ArrowRight className="h-4 w-4 ml-auto" />
-            </Button>
-
-            <div className="relative flex items-center justify-center">
-              <div className="border-t border-border w-full"></div>
-              <span className="bg-card px-3 text-3xs font-semibold text-muted-foreground uppercase tracking-widest absolute">
-                or sign in with password
-              </span>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-4 pt-2" autoComplete="off">
+            <form onSubmit={handleSubmit} className="space-y-4 pt-1" autoComplete="off">
               {error && (
                 <Alert variant="destructive" className="rounded-xl">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription className="text-xs leading-relaxed">{error}</AlertDescription>
                 </Alert>
               )}
               
@@ -88,8 +72,8 @@ export default function Login() {
                   id="username"
                   name="admin_user"
                   type="text"
-                  autoComplete="off"
-                  placeholder="admin"
+                  autoComplete="username"
+                  placeholder="e.g. admin"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="rounded-xl text-sm"
@@ -103,7 +87,7 @@ export default function Login() {
                   id="password"
                   name="admin_pwd"
                   type="password"
-                  autoComplete="new-password"
+                  autoComplete="current-password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -114,11 +98,12 @@ export default function Login() {
 
               <Button
                 type="submit"
-                variant="outline"
-                className="w-full rounded-xl font-semibold border-primary/30 hover:bg-primary/5"
+                className="w-full rounded-xl font-bold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-700 hover:to-sky-600 text-white shadow-lg shadow-blue-500/20 py-5 gap-2"
                 data-testid="button-login"
               >
-                Sign In
+                <ShieldCheck className="h-4 w-4" />
+                Sign In to Administration
+                <ArrowRight className="h-4 w-4 ml-auto" />
               </Button>
             </form>
           </CardContent>
