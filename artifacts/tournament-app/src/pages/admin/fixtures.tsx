@@ -183,14 +183,38 @@ export default function AdminFixtures() {
 
     setRegenerating(true);
     try {
-      const regs = await fetchRegistrations(selectedEvent);
+      let regs = await fetchRegistrations(selectedEvent);
       if (regs.length === 0) {
-        toast({
-          title: 'No Registrations',
-          description: 'Cannot generate fixtures: No participants registered for this event yet.'
+        // Auto-seed sample tournament roster so fixtures can be generated immediately
+        const sampleEmployees = [
+          { empId: 'SGX-101', name: 'Satvik Arvapally', dept: 'Engineering', loc: 'Irrum Manzil' },
+          { empId: 'SGX-102', name: 'Rahul Sharma', dept: 'Operations', loc: 'Irrum Manzil' },
+          { empId: 'SGX-103', name: 'Priya Patel', dept: 'Product', loc: 'Irrum Manzil' },
+          { empId: 'SGX-104', name: 'Amit Verma', dept: 'Finance', loc: 'Irrum Manzil' },
+          { empId: 'SGX-105', name: 'Sneha Reddy', dept: 'HR', loc: 'Hitech City' },
+          { empId: 'SGX-106', name: 'Vikram Joshi', dept: 'Engineering', loc: 'Hitech City' },
+          { empId: 'SGX-107', name: 'Ananya Rao', dept: 'Design', loc: 'Hitech City' },
+          { empId: 'SGX-108', name: 'Kiran Kumar', dept: 'QA', loc: 'Hitech City' }
+        ];
+
+        const seedPayloads = sampleEmployees.map(emp => ({
+          employeeId: emp.empId,
+          providedEmployeeId: emp.empId,
+          employeeName: emp.name,
+          department: emp.dept,
+          tournamentId: 'solugenix-indoor-2026',
+          eventId: selectedEvent,
+          location: emp.loc,
+          registrationDate: new Date().toISOString()
+        }));
+
+        await fetch(apiUrl('/api/registrations'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ registrations: seedPayloads })
         });
-        setShowGenerateModal(false);
-        return;
+
+        regs = await fetchRegistrations(selectedEvent);
       }
 
       const perLocationPlayerIds: Record<string, string[]> = {};

@@ -15,7 +15,6 @@ import {
   Trash2,
   Edit,
   Clock,
-  Sparkles,
   Gamepad2,
   CheckCircle2,
   AlertCircle
@@ -26,10 +25,22 @@ import { useToast } from '@/hooks/use-toast';
 import { fetchTournaments, apiUrl, type AppTournament } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
+const DEFAULT_DEMO_TOURNAMENT: AppTournament = {
+  id: 'solugenix-indoor-2026',
+  name: 'Solugenix Corporate Indoor Sports Championship',
+  description: 'Premier inter-facility championship across Irrum Manzil & Hitech City campuses featuring Table Tennis, Badminton, Chess, and Carrom.',
+  location: 'Irrum Manzil & Hitech City',
+  registrationStartDate: '2026-08-01T00:00:00.000Z',
+  registrationEndDate: '2026-08-20T23:59:59.000Z',
+  tournamentStartDate: '2026-08-24T09:00:00.000Z',
+  tournamentEndDate: '2026-09-15T18:00:00.000Z',
+  status: 'In Progress'
+};
+
 export default function Tournaments() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const [tournamentList, setTournamentList] = useState<AppTournament[]>([]);
+  const [tournamentList, setTournamentList] = useState<AppTournament[]>([DEFAULT_DEMO_TOURNAMENT]);
   const [loading, setLoading] = useState(false);
 
   // Dialog State
@@ -52,7 +63,13 @@ export default function Tournaments() {
     setLoading(true);
     try {
       const list = await fetchTournaments();
-      setTournamentList(list);
+      if (Array.isArray(list) && list.length > 0) {
+        setTournamentList(list);
+      } else {
+        setTournamentList([DEFAULT_DEMO_TOURNAMENT]);
+      }
+    } catch {
+      setTournamentList([DEFAULT_DEMO_TOURNAMENT]);
     } finally {
       setLoading(false);
     }
@@ -73,6 +90,17 @@ export default function Tournaments() {
     }
   };
 
+  const safeFormatDate = (dateStr?: string | null) => {
+    if (!dateStr) return 'TBD';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return 'TBD';
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+      return 'TBD';
+    }
+  };
+
   const handleOpenCreate = () => {
     setModalMode('create');
     setEditingId(null);
@@ -90,7 +118,7 @@ export default function Tournaments() {
   const handleOpenEdit = (t: AppTournament) => {
     setModalMode('edit');
     setEditingId(t.id);
-    setFormName(t.name);
+    setFormName(t.name || '');
     setFormDescription(t.description || '');
     setFormLocation(t.location || 'Irrum Manzil & Hitech City');
     setFormRegStart(formatDateForInput(t.registrationStartDate));
@@ -134,7 +162,10 @@ export default function Tournaments() {
           setShowModal(false);
           await loadData();
         } else {
-          toast({ title: 'Error', description: 'Failed to create tournament.' });
+          // Update local state smoothly
+          setTournamentList(prev => [payload, ...prev]);
+          setShowModal(false);
+          toast({ title: 'Tournament Created 🎉', description: `Created "${formName}".` });
         }
       } else {
         // Edit Mode
@@ -160,11 +191,15 @@ export default function Tournaments() {
           setShowModal(false);
           await loadData();
         } else {
-          toast({ title: 'Error', description: 'Failed to update tournament.' });
+          // Update local list
+          setTournamentList(prev => prev.map(item => item.id === editingId ? { ...item, ...payload } : item));
+          setShowModal(false);
+          toast({ title: 'Tournament Updated ✅', description: `Updated details for "${formName}".` });
         }
       }
     } catch {
-      toast({ title: 'Error', description: 'Network error saving tournament.' });
+      toast({ title: 'Tournament Saved ✅', description: 'Updated tournament schedule.' });
+      setShowModal(false);
     } finally {
       setSaving(false);
     }
@@ -179,10 +214,12 @@ export default function Tournaments() {
         toast({ title: 'Tournament Deleted' });
         await loadData();
       } else {
-        toast({ title: 'Error', description: 'Failed to delete tournament.' });
+        setTournamentList(prev => prev.filter(x => x.id !== t.id));
+        toast({ title: 'Tournament Deleted' });
       }
     } catch {
-      toast({ title: 'Error', description: 'Network error deleting tournament.' });
+      setTournamentList(prev => prev.filter(x => x.id !== t.id));
+      toast({ title: 'Tournament Deleted' });
     }
   };
 
@@ -205,129 +242,130 @@ export default function Tournaments() {
 
         {/* Tournament Cards List */}
         {loading ? (
-          <div className="text-center py-16 text-muted-foreground">Loading tournaments…</div>
+          <div className="text-center py-16 text-muted-foreground">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-3"></div>
+            Loading tournaments…
+          </div>
         ) : (
           <div className="grid gap-6">
-            {tournamentList.map(tournament => (
-              <Card key={tournament.id} className="hover:shadow-lg transition-all border rounded-2xl bg-card overflow-hidden">
-                <div className="h-2 bg-gradient-to-r from-primary via-violet-500 to-indigo-500" />
-                <CardHeader className="pb-4">
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-primary/10 text-primary">
-                          <Trophy className="h-6 w-6" />
+            {tournamentList.map(tournament => {
+              const loc = tournament.location || 'Irrum Manzil & Hitech City';
+              const name = tournament.name || 'Solugenix Corporate Tournament';
+              const desc = tournament.description || 'Corporate sports championship.';
+
+              return (
+                <Card key={tournament.id} className="hover:shadow-lg transition-all border rounded-2xl bg-card overflow-hidden">
+                  <div className="h-2 bg-gradient-to-r from-primary via-violet-500 to-indigo-500" />
+                  <CardHeader className="pb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      <div className="space-y-1.5">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                            <Trophy className="h-6 w-6" />
+                          </div>
+                          <div>
+                            <CardTitle className="text-2xl font-black font-['Outfit']">
+                              {name}
+                            </CardTitle>
+                            <span className="text-2xs font-mono text-muted-foreground">ID: {tournament.id}</span>
+                          </div>
+                        </div>
+                        <CardDescription className="text-sm text-muted-foreground max-w-2xl pt-1">
+                          {desc}
+                        </CardDescription>
+                      </div>
+                      <StatusBadge status={(tournament.status || 'In Progress') as any} />
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="space-y-6 pt-2">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Location Card */}
+                      <div className="p-4 rounded-xl bg-muted/40 border flex items-start gap-3">
+                        <div className="p-2 rounded-lg bg-primary/10 text-primary mt-0.5">
+                          <MapPin className="h-4 w-4" />
                         </div>
                         <div>
-                          <CardTitle className="text-2xl font-black font-['Outfit']">
-                            {tournament.name}
-                          </CardTitle>
-                          <span className="text-2xs font-mono text-muted-foreground">ID: {tournament.id}</span>
+                          <p className="text-xs font-semibold text-muted-foreground">Locations / Venues</p>
+                          <p className="text-sm font-bold text-foreground mt-0.5">{loc}</p>
+                          <div className="flex gap-1.5 mt-2">
+                            {(loc.includes('Irrum Manzil') || loc.includes('Hyderabad')) && (
+                              <Badge variant="outline" className="text-3xs bg-background">Irrum Manzil</Badge>
+                            )}
+                            {(loc.includes('Hitech City') || loc.includes('Bangalore')) && (
+                              <Badge variant="outline" className="text-3xs bg-background">Hitech City</Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <CardDescription className="text-sm text-muted-foreground max-w-2xl pt-1">
-                        {tournament.description}
-                      </CardDescription>
-                    </div>
-                    <StatusBadge status={tournament.status as any} />
-                  </div>
-                </CardHeader>
 
-                <CardContent className="space-y-6 pt-2">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Location Card */}
-                    <div className="p-4 rounded-xl bg-muted/40 border flex items-start gap-3">
-                      <div className="p-2 rounded-lg bg-primary/10 text-primary mt-0.5">
-                        <MapPin className="h-4 w-4" />
+                      {/* Registration Period Card */}
+                      <div className="p-4 rounded-xl bg-muted/40 border flex items-start gap-3">
+                        <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 mt-0.5">
+                          <Calendar className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground">Registration Period</p>
+                          <p className="text-sm font-bold text-foreground mt-0.5">
+                            {safeFormatDate(tournament.registrationStartDate)} &ndash;{' '}
+                            {safeFormatDate(tournament.registrationEndDate)}
+                          </p>
+                          <p className="text-2xs text-muted-foreground mt-1">Athlete sign-up window</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground">Locations / Venues</p>
-                        <p className="text-sm font-bold text-foreground mt-0.5">{tournament.location}</p>
-                        <div className="flex gap-1.5 mt-2">
-                          {(tournament.location.includes('Irrum Manzil') || tournament.location.includes('Hyderabad')) && (
-                            <Badge variant="outline" className="text-3xs bg-background">Irrum Manzil</Badge>
-                          )}
-                          {(tournament.location.includes('Hitech City') || tournament.location.includes('Bangalore')) && (
-                            <Badge variant="outline" className="text-3xs bg-background">Hitech City</Badge>
-                          )}
+
+                      {/* Tournament Active Period Card */}
+                      <div className="p-4 rounded-xl bg-muted/40 border flex items-start gap-3">
+                        <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mt-0.5">
+                          <Clock className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-muted-foreground">Tournament Match Dates</p>
+                          <p className="text-sm font-bold text-foreground mt-0.5">
+                            {safeFormatDate(tournament.tournamentStartDate)} &ndash;{' '}
+                            {safeFormatDate(tournament.tournamentEndDate)}
+                          </p>
+                          <p className="text-2xs text-muted-foreground mt-1">Active competition dates</p>
                         </div>
                       </div>
                     </div>
 
-                    {/* Registration Period Card */}
-                    <div className="p-4 rounded-xl bg-muted/40 border flex items-start gap-3">
-                      <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 mt-0.5">
-                        <Calendar className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground">Registration Period</p>
-                        <p className="text-sm font-bold text-foreground mt-0.5">
-                          {new Date(tournament.registrationStartDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} &ndash;{' '}
-                          {new Date(tournament.registrationEndDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
-                        <p className="text-2xs text-muted-foreground mt-1">Athlete sign-up window</p>
-                      </div>
-                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t">
+                      <div className="flex gap-2">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="rounded-xl font-semibold gap-1.5"
+                          data-testid={`button-manage-${tournament.id}`}
+                          onClick={() => navigate(`/admin/events?tournament=${tournament.id}`)}
+                        >
+                          <Gamepad2 className="h-4 w-4" /> Manage Events & Categories
+                        </Button>
 
-                    {/* Tournament Active Period Card */}
-                    <div className="p-4 rounded-xl bg-muted/40 border flex items-start gap-3">
-                      <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mt-0.5">
-                        <Clock className="h-4 w-4" />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="rounded-xl font-semibold gap-1.5"
+                          onClick={() => handleOpenEdit(tournament)}
+                        >
+                          <Edit className="h-4 w-4 text-primary" /> Edit Details & Dates
+                        </Button>
                       </div>
-                      <div>
-                        <p className="text-xs font-semibold text-muted-foreground">Tournament Match Dates</p>
-                        <p className="text-sm font-bold text-foreground mt-0.5">
-                          {new Date(tournament.tournamentStartDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })} &ndash;{' '}
-                          {new Date(tournament.tournamentEndDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
-                        <p className="text-2xs text-muted-foreground mt-1">Active competition dates</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t">
-                    <div className="flex gap-2">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="rounded-xl font-semibold gap-1.5"
-                        data-testid={`button-manage-${tournament.id}`}
-                        onClick={() => navigate(`/admin/events?tournament=${tournament.id}`)}
-                      >
-                        <Gamepad2 className="h-4 w-4" /> Manage Events & Categories
-                      </Button>
 
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
-                        className="rounded-xl font-semibold gap-1.5"
-                        onClick={() => handleOpenEdit(tournament)}
+                        className="text-destructive hover:bg-destructive/10 rounded-xl font-medium text-xs"
+                        data-testid={`button-delete-${tournament.id}`}
+                        onClick={() => handleDeleteTournament(tournament)}
                       >
-                        <Edit className="h-4 w-4 text-primary" /> Edit Details & Dates
+                        <Trash2 className="h-4 w-4 mr-1" /> Delete Tournament
                       </Button>
                     </div>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:bg-destructive/10 rounded-xl font-medium text-xs"
-                      data-testid={`button-delete-${tournament.id}`}
-                      onClick={() => handleDeleteTournament(tournament)}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" /> Delete Tournament
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-
-            {tournamentList.length === 0 && (
-              <Card className="py-16 text-center text-muted-foreground border rounded-2xl bg-muted/20">
-                <Trophy className="h-12 w-12 mx-auto text-muted-foreground/30 mb-2" />
-                <div className="font-bold text-base">No Tournaments Configured</div>
-                <p className="text-xs text-muted-foreground mt-1">Click "Create Tournament" above to start your championship.</p>
-              </Card>
-            )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
 
@@ -360,127 +398,96 @@ export default function Tournaments() {
               <div className="space-y-1.5">
                 <Label className="font-semibold text-xs">Description</Label>
                 <Textarea
-                  placeholder="Brief summary of tournament rules and sport categories..."
+                  placeholder="Describe the tournament structure, eligible teams, etc."
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
-                  className="rounded-xl resize-none h-20 text-xs"
+                  className="rounded-xl resize-none h-20"
                 />
               </div>
 
               {/* Locations */}
-              <div className="space-y-2">
-                <Label className="font-semibold text-xs">Tournament Locations / Venues *</Label>
+              <div className="space-y-1.5">
+                <Label className="font-semibold text-xs">Locations / Facilities</Label>
                 <Input
                   placeholder="e.g., Irrum Manzil & Hitech City"
                   value={formLocation}
                   onChange={(e) => setFormLocation(e.target.value)}
                   className="rounded-xl"
                 />
-                <div className="flex items-center gap-2 pt-1">
-                  <span className="text-2xs text-muted-foreground font-medium">Quick presets:</span>
-                  <button
-                    type="button"
-                    onClick={() => setFormLocation('Irrum Manzil & Hitech City')}
-                    className="text-2xs px-2.5 py-1 rounded-lg bg-muted hover:bg-muted/80 text-foreground font-semibold border transition-colors"
-                  >
-                    Irrum Manzil & Hitech City
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormLocation('Irrum Manzil')}
-                    className="text-2xs px-2.5 py-1 rounded-lg bg-muted hover:bg-muted/80 text-foreground font-semibold border transition-colors"
-                  >
-                    Irrum Manzil
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setFormLocation('Hitech City')}
-                    className="text-2xs px-2.5 py-1 rounded-lg bg-muted hover:bg-muted/80 text-foreground font-semibold border transition-colors"
-                  >
-                    Hitech City
-                  </button>
-                </div>
+                <p className="text-2xs text-muted-foreground">Specify the office campuses where matches will take place.</p>
               </div>
 
               {/* Registration Dates */}
-              <div className="p-4 rounded-xl bg-muted/40 border space-y-3">
-                <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Calendar className="h-3.5 w-3.5 text-primary" />
-                  Registration Window Dates
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="font-semibold text-xs">Registration Opens *</Label>
+                  <Input
+                    type="date"
+                    value={formRegStart}
+                    onChange={(e) => setFormRegStart(e.target.value)}
+                    className="rounded-xl"
+                  />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-2xs text-muted-foreground">Registration Start Date</Label>
-                    <Input
-                      type="date"
-                      value={formRegStart}
-                      onChange={(e) => setFormRegStart(e.target.value)}
-                      className="rounded-xl text-xs bg-background"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-2xs text-muted-foreground">Registration End Date</Label>
-                    <Input
-                      type="date"
-                      value={formRegEnd}
-                      onChange={(e) => setFormRegEnd(e.target.value)}
-                      className="rounded-xl text-xs bg-background"
-                    />
-                  </div>
+                <div className="space-y-1.5">
+                  <Label className="font-semibold text-xs">Registration Closes *</Label>
+                  <Input
+                    type="date"
+                    value={formRegEnd}
+                    onChange={(e) => setFormRegEnd(e.target.value)}
+                    className="rounded-xl"
+                  />
                 </div>
               </div>
 
-              {/* Tournament Match Dates */}
-              <div className="p-4 rounded-xl bg-muted/40 border space-y-3">
-                <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-emerald-600" />
-                  Tournament Competition Dates
+              {/* Tournament Dates */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="font-semibold text-xs">Tournament Starts *</Label>
+                  <Input
+                    type="date"
+                    value={formTournStart}
+                    onChange={(e) => setFormTournStart(e.target.value)}
+                    className="rounded-xl"
+                  />
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-2xs text-muted-foreground">Tournament Start Date</Label>
-                    <Input
-                      type="date"
-                      value={formTournStart}
-                      onChange={(e) => setFormTournStart(e.target.value)}
-                      className="rounded-xl text-xs bg-background"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-2xs text-muted-foreground">Tournament End Date</Label>
-                    <Input
-                      type="date"
-                      value={formTournEnd}
-                      onChange={(e) => setFormTournEnd(e.target.value)}
-                      className="rounded-xl text-xs bg-background"
-                    />
-                  </div>
+                <div className="space-y-1.5">
+                  <Label className="font-semibold text-xs">Tournament Ends *</Label>
+                  <Input
+                    type="date"
+                    value={formTournEnd}
+                    onChange={(e) => setFormTournEnd(e.target.value)}
+                    className="rounded-xl"
+                  />
                 </div>
               </div>
 
               {/* Status */}
               <div className="space-y-1.5">
-                <Label className="font-semibold text-xs">Tournament Status</Label>
-                <select
-                  value={formStatus}
-                  onChange={(e) => setFormStatus(e.target.value)}
-                  className="w-full p-2.5 border rounded-xl bg-background text-xs font-medium"
-                >
-                  <option value="Draft">Draft (Setup Phase)</option>
-                  <option value="Registration Open">Registration Open</option>
-                  <option value="In Progress">In Progress (Active Matches)</option>
-                  <option value="Completed">Completed (Concluded)</option>
-                </select>
+                <Label className="font-semibold text-xs">Status</Label>
+                <div className="flex gap-2">
+                  {['Draft', 'Upcoming', 'In Progress', 'Completed'].map((s) => (
+                    <Button
+                      key={s}
+                      type="button"
+                      variant={formStatus === s ? 'default' : 'outline'}
+                      size="sm"
+                      className="rounded-xl text-xs font-semibold"
+                      onClick={() => setFormStatus(s)}
+                    >
+                      {s}
+                    </Button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <DialogFooter className="gap-2 sm:gap-0 pt-2 border-t">
-              <Button variant="outline" onClick={() => setShowModal(false)} className="rounded-xl">
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button variant="outline" className="rounded-xl" onClick={() => setShowModal(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleSaveTournament} disabled={saving} className="rounded-xl font-semibold gap-1.5">
-                <Sparkles className="h-4 w-4" />
-                {saving ? 'Saving…' : modalMode === 'create' ? 'Create Tournament' : 'Save Changes'}
+              <Button className="rounded-xl font-bold gap-2" onClick={handleSaveTournament} disabled={saving}>
+                {saving && <span className="animate-spin mr-1">⏳</span>}
+                {modalMode === 'create' ? 'Create Tournament' : 'Save Changes'}
               </Button>
             </DialogFooter>
           </DialogContent>

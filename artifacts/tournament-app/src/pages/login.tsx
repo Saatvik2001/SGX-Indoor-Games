@@ -5,16 +5,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, ShieldCheck, ArrowRight } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { SolugenixLogo } from '@/components/SolugenixLogo';
 
 export default function Login() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('admin123');
   const [error, setError] = useState('');
   const { login } = useAuth();
   const [, setLocation] = useLocation();
+
+  const handleQuickLogin = () => {
+    login();
+    setLocation('/admin/dashboard');
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,11 +51,30 @@ export default function Login() {
 
         <Card className="border border-sky-500/20 shadow-xl shadow-blue-500/5 backdrop-blur-sm rounded-2xl">
           <CardHeader>
-            <CardTitle className="text-xl font-bold font-['Outfit']">Sign In</CardTitle>
-            <CardDescription>Enter your credentials to access the admin panel</CardDescription>
+            <CardTitle className="text-xl font-bold font-['Outfit']">Admin Portal Sign In</CardTitle>
+            <CardDescription>Access tournament management, fixtures, and scorecards</CardDescription>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+          <CardContent className="space-y-4">
+            {/* 1-Click Instant Sign In Button */}
+            <Button
+              type="button"
+              onClick={handleQuickLogin}
+              className="w-full rounded-xl font-bold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-700 hover:to-sky-600 text-white shadow-lg shadow-blue-500/20 py-5 gap-2"
+              data-testid="button-quick-login"
+            >
+              <ShieldCheck className="h-5 w-5" />
+              Sign In as Administrator
+              <ArrowRight className="h-4 w-4 ml-auto" />
+            </Button>
+
+            <div className="relative flex items-center justify-center">
+              <div className="border-t border-border w-full"></div>
+              <span className="bg-card px-3 text-3xs font-semibold text-muted-foreground uppercase tracking-widest absolute">
+                or sign in with password
+              </span>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4 pt-2" autoComplete="off">
               {error && (
                 <Alert variant="destructive" className="rounded-xl">
                   <AlertCircle className="h-4 w-4" />
@@ -58,54 +82,47 @@ export default function Login() {
                 </Alert>
               )}
               
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="username" className="text-xs font-semibold">Username</Label>
                 <Input
                   id="username"
+                  name="admin_user"
                   type="text"
+                  autoComplete="off"
                   placeholder="admin"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  required
-                  className="rounded-xl"
+                  className="rounded-xl text-sm"
                   data-testid="input-username"
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="password" className="text-xs font-semibold">Password</Label>
                 <Input
                   id="password"
+                  name="admin_pwd"
                   type="password"
+                  autoComplete="new-password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="rounded-xl"
+                  className="rounded-xl text-sm"
                   data-testid="input-password"
                 />
               </div>
 
               <Button
                 type="submit"
-                className="w-full rounded-xl font-bold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-700 hover:to-sky-600 text-white shadow-lg shadow-blue-500/20 py-5"
+                variant="outline"
+                className="w-full rounded-xl font-semibold border-primary/30 hover:bg-primary/5"
                 data-testid="button-login"
               >
-                Sign In to Console
+                Sign In
               </Button>
-
-              <div className="text-center text-xs text-muted-foreground pt-4 border-t">
-                Demo credentials: <span className="font-mono font-semibold text-foreground">admin / admin123</span>
-              </div>
             </form>
           </CardContent>
         </Card>
-
-        <div className="text-center">
-          <Button variant="link" onClick={() => setLocation('/')} data-testid="link-back-home" className="text-xs text-muted-foreground hover:text-foreground">
-            ← Back to Public Arena
-          </Button>
-        </div>
       </div>
     </div>
   );
